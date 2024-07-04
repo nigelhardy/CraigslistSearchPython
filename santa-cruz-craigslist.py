@@ -1,5 +1,6 @@
 import craigslistscraper as cs
 import json
+import time
 import webbrowser
 import argparse
 import pickle
@@ -23,13 +24,13 @@ from results_to_html import results_to_html
 # keep record of the listings we've already seen and don't send them twice
 # might want to have the similarity text feature at somepoint so we dont' see the same ones renewed over and over
 
-
 # Define the search. Everything is done lazily, and so the html is not
 # fetched at this step.
 def fetch_new_data(search_type):
     results = []
     search = None
     filters = None
+
     if search_type == "SC":
         search = cs.Search(
             query = "garage",
@@ -43,12 +44,12 @@ def fetch_new_data(search_type):
         }
     elif search_type == "LG":
         search = cs.Search(
-            query = "garage",
+            query = "",
             city = "sfbay",
             category = "apa"
         )
         filters = {
-            "max_price": 3800,
+            "max_price": 4000,
             "postal": 95030,
             "search_distance": 5
         }
@@ -60,7 +61,11 @@ def fetch_new_data(search_type):
     if status != 200:
         raise Exception(f"Unable to fetch search with status <{status}>.")
     print(len(search.ads))
+    count = 0
     for ad in search.ads:
+        # if count > 3:
+        #     break
+        # count += 1
         # Fetch additional information about each ad. Check the status again.
         try:
             status = ad.fetch()
@@ -70,13 +75,14 @@ def fetch_new_data(search_type):
                 continue
         except Exception as e:
             print(ad)
+            print(e)
             print("Failed to fetch")
             continue
-
 
         # There is a to_dict() method for convenience.
         data = ad.to_dict()
         results.append(data)
+    
         # json.dumps is merely for pretty printing.
         # print(json.dumps(data, indent = 4))
     with open('my_dict' + search_type + '.pkl', 'wb') as file:
@@ -100,7 +106,6 @@ def main():
         # use old data
         with open('my_dict' + args.type + '.pkl', 'rb') as file:
             results = pickle.load(file)
-
     sorted_results = calculate_scores(results, args.type)
     html_content = results_to_html(sorted_results)
 
