@@ -33,14 +33,14 @@ def fetch_new_data(search_type):
 
     if search_type == "SC":
         search = cs.Search(
-            query = "garage",
+            query = "",
             city = "sfbay",
             category = "apa"
         )
         filters = {
-            "max_price" : 3200,
+            "max_price" : 3300,
             "postal": 95010,
-            "search_distance": 8,
+            "search_distance": 10,
         }
     elif search_type == "LG":
         search = cs.Search(
