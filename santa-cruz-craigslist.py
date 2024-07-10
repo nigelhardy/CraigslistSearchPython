@@ -21,6 +21,7 @@ from results_to_html import results_to_html
 	# <meta name="geo.position" content="36.951950;-121.850095">
 	# <meta name="ICBM" content="36.951950, -121.850095">
 
+# NEXT STEP
 # keep record of the listings we've already seen and don't send them twice
 # might want to have the similarity text feature at somepoint so we dont' see the same ones renewed over and over
 

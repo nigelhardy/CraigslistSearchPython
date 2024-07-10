@@ -29,14 +29,18 @@ def calc_price_score_sc(price):
     return score_change
 
 def calc_sqr_foot_score_sc(sqr_foot):
-    score_change = (sqr_foot - 800) / 500
+    if sqr_foot == -1:
+        return 0
+    score_change = (sqr_foot - 800) / 100
     if sqr_foot < 500 or sqr_foot > 3000:
         score_change = -5
     score_change = min(score_change, 4)
     return score_change
 
 def calc_distance_sc(distance):
-    score_change = (8 - distance) * .25
+    if distance == -1:
+        return 0
+    score_change = ((8 - distance) * .25) - 2
     return score_change
 
 def get_sc_scoring_info():
@@ -50,33 +54,74 @@ def get_sc_scoring_info():
                    "carport": -1,
                    "3br":4,
                    "2br":3,
-                   "1br": -1,
+                   "1br": -5,
                    "0br": -6,
+                   "furnished": -2,
                    "w/d in unit": 2,
                    "apartment": -1,
                    "house": 2,
+                   'cottage/cabin': 1,
                    "townhouse": 1,
                    "air conditioning":2,
-                   "CENTURY 21 VERDESCHI AND WALSH REALTY.;".lower(): -10, # spam
-                   "CENTURY 21 VERDESCHI AND WALSH REALTY".lower(): -10, # spam
-                   "ft2": calc_sqr_foot_score_sc, # todo, make function?
+                   "laundry on site": 1,
+                   'laundry in bldg': 2,
+                   "ft2": calc_sqr_foot_score_sc,
                    }
+    remove_spam_bad = { "desc": ["🆃🅴🆇🆃 ME NUMBER!!!!",
+                                 "TEXT YOUR CONTACT NOW",
+                                 "TEXT ME NUMBER!!!!",
+                                 "Luxury lobby and reception area fully attended",
+                                  "💫Pre-installed intrusion alarm"] ,
+                        "attrs": ["CENTURY 21 VERDESCHI AND WALSH REALTY.;".lower(),
+                                 "CENTURY 21 VERDESCHI AND WALSH REALTY".lower(),
+                                 ],
+                        "title": ['Rooms for rent']
+    }
+    score_info['remove'] = remove_spam_bad
     
     # TODO there will be some where they are a subset of another
     # like garage, no garage, 1-car garage, etc, need to handle those!
     # parking garage
+    # could have them be part of a group, and group can only be added once
+    # would be nice for AC and stuff that would get double counted
 
-    # Single Car Garage
-    desc_scores = {"🆃🅴🆇🆃 ME NUMBER!!!!":-10, # spam
-                   "converted garage": -10,
+    desc_scores = {"converted garage": -10,
                    "no garage": -10,
+                   "garage space is not included": -10,
                    "parking garage": -6,
                    "garage": 5,
-                   "TEXT ME NUMBER!!!!": -10, # spam
-                   "TEXT YOUR CONTACT NOW": -10, # spam
-                   "Luxury lobby and reception area fully attended": -10,
+                   'lots of light ': 2,
                    "Occupancy Limit: 1 People": -5,
-                   "💫Pre-installed intrusion alarm": -10}
+                   "Utilities are not included": -2,
+                   'All utilities are included': 2,
+                   'All utilities included': 2,
+                   'Water and Garbage Included': 1,
+                   'Coin-op laundry': -1,
+                   'street parking only ': -3,
+                   'In-Home Washer/Dryer':2,
+                   'in-unit washer/dryer': 2,
+                   'Dual Pane Windows': 1,
+                   'A/C': 1,
+                   'Air Conditioning': 1,
+                   'Air Conditioner': 1,
+                   'Central HVAC': 1,
+                   '1 car garage': 3,
+                   '1-car garage': 3,
+                   'one-car garage': 3,
+                   'one car garage': 3,
+                   'two-car garage': 5,
+                   'two car garage': 5,
+                   '2 car garage':5,
+                   '2-car garage':5,
+                   'One-Car Carport': -2,
+                   'garage space used as an extra room': -2,
+                   'underground parking garage': -2,
+                   'garage log': -2,
+                   'coin operated laundry': -1,
+                   'coin-operated laundry': -1,
+                   '1 person max': -5,
+                   '1-person max': -5
+                   }
     score_info['desc'] = desc_scores
     title_scores = {"":2,}
     score_info['title'] = title_scores
@@ -165,17 +210,29 @@ def calc_scores(results, score_info):
                 sqr_foot = int(attr_lc.split("ft2")[0])
                 score += score_info['attrs']['ft2'](sqr_foot)
                 res['sqr_foot'] = sqr_foot
-            elif attr_lc in score_info['attrs']:
-                if not callable(score_info['attrs'][attr_lc]):
-                    score += score_info['attrs'][attr_lc]
+            for attr_key in score_info['attrs'].keys():
+                if attr_key in attr_lc:
+                    if not callable(score_info['attrs'][attr_key]):
+                        score += score_info['attrs'][attr_key]
+            # spam/remove/bad
+            if attr_lc in score_info['remove']['attrs']:
+                score = -1000 # remove
         for item in score_info['title']:
             if item.lower() in res['title']:
                 score += score_info['title'][item]
+        description_lower = res['description'].lower()
+
         for item in score_info['desc']:
-            ## TODO make this be either more specific or less, for spam more specific
-            ## allowing both right now for no good reason, maybe separate spam and scoring
-            if item.lower() in res['description'].lower() or item in res['description']:
+            if item.lower() in description_lower:
                 score += score_info['desc'][item]
+        ## Handle remove/spam/bad in description
+        for item in score_info['remove']['desc']:
+            if item.lower() in description_lower:
+                score = -1000
+        ## Handle remove/spam/bad in description
+        for item in score_info['remove']['title']:
+            if item.lower() in res['title'].lower():
+                score = -1000
         latitude, longitude = map(float, res['coord'].split(';'))
         distance = haversine(center_lat, center_long, latitude, longitude)
         score += score_info['distance'](distance)
@@ -193,25 +250,3 @@ def calc_scores(results, score_info):
     filtered_list = [results[i] for i in range(len(results)) if i not in rem_idxs]
     sorted_data = sorted(filtered_list, key=lambda x: x['score'], reverse=True)
     return sorted_data
-
-# bad stuff
-## garage space used as an extra room
-## Underground parking garage
-## Garage lot
-## coin-operated laundry, Coin-Op Laundry
-
-
-## laundry on-site
-
-# good stuff
-## All utilities are included, Water & Garbage Service Included
-## A/C, Air Conditioning, Air Conditioner
-## Dual Pane Windows
-## in-unit washer/dryer, In-Home Washer/Dryer, w/d in unit  
-## Pet-Friendly, dogs are ok
-## One-Car Garage
-
-
-## Group together: Shadowcreek (2474 South Bascom Avenue)
-# fake ads
-#   https://sfbay.craigslist.org/sby/apa/d/san-jose-great-location-easy-access-to/7762730613.html
