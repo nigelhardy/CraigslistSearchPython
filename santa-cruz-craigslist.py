@@ -1,15 +1,17 @@
 import craigslistscraper as cs
 import json
 import time
+import os
 import webbrowser
 import argparse
 import pickle
 import smtplib
+from Levenshtein import ratio
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from calc_scores import calculate_scores
 from results_to_html import results_to_html
-
 ## TODO
 # send email
 # setup to run daily or periodically somehow, remember that we had to fix the library slighty
@@ -27,7 +29,7 @@ from results_to_html import results_to_html
 
 # Define the search. Everything is done lazily, and so the html is not
 # fetched at this step.
-def fetch_new_data(search_type):
+def fetch_new_data(search_type, max_fetches, prev_results):
     results = []
     search = None
     filters = None
@@ -54,6 +56,9 @@ def fetch_new_data(search_type):
             "postal": 95030,
             "search_distance": 5
         }
+    old_urls = []
+    for res in prev_results:
+        old_urls.append(res['url'])
 
     # Fetch the html from the server. Don't forget to check the status.
     status = search.fetch(params=filters)
@@ -61,12 +66,20 @@ def fetch_new_data(search_type):
 
     if status != 200:
         raise Exception(f"Unable to fetch search with status <{status}>.")
-    print(len(search.ads))
+    print("Number of listings from search: " + str(len(search.ads)))
+
     count = 0
     for ad in search.ads:
-        # if count > 3:
-        #     break
-        # count += 1
+        if max_fetches != -1 and count > max_fetches:
+            print("MAX Fetches Reached")
+            break
+        if ad.url in old_urls:
+            print("OLD URL")
+            continue
+        else:
+            print("NEW URL: " + ad.url)
+            count += 1
+            
         # Fetch additional information about each ad. Check the status again.
         try:
             status = ad.fetch()
@@ -83,11 +96,7 @@ def fetch_new_data(search_type):
         # There is a to_dict() method for convenience.
         data = ad.to_dict()
         results.append(data)
-    
-        # json.dumps is merely for pretty printing.
-        # print(json.dumps(data, indent = 4))
-    with open('my_dict' + search_type + '.pkl', 'wb') as file:
-        pickle.dump(results, file)
+
     return results
 
 def main():
@@ -96,26 +105,66 @@ def main():
     parser.add_argument('--email', action='store_true', help='Send email')
     parser.add_argument('--display', action='store_true', help='Display HTML in browser')
     parser.add_argument('--type', type=str, choices=['SC', 'LG'], default='SC', help='Type of property (SC or LG)')
+    parser.add_argument('--max_fetches', type=int, default=-1, help='Max number of listings to parse')
 
     parser.add_argument('--test-url', type=str, help='URL to test ranking/scoring')
     
     args = parser.parse_args()
-    results = []
-    if args.fetch:
-        results = fetch_new_data(args.type)
-    else:
-        # use old data
-        with open('my_dict' + args.type + '.pkl', 'rb') as file:
-            results = pickle.load(file)
-    sorted_results = calculate_scores(results, args.type)
-    html_content = results_to_html(sorted_results)
 
     if args.test_url:
         ## for testing the library
         # example url: https://sfbay.craigslist.org/scz/apa/d/santa-cruz-sunny-seabright-studio-by/7762308713.html
         ad = cs.fetch_ad(args.test_url)
         print(ad.attributes)
-        return  
+        return
+
+    results = []
+    prev_results = []
+    # use old data
+    file_path = 'my_dict' + args.type + '.pkl'
+    if os.path.isfile(file_path):
+        with open(file_path, 'rb') as file:
+            prev_results = pickle.load(file)
+    if args.fetch:
+        results = fetch_new_data(args.type, args.max_fetches, prev_results)
+    else: # use old results and show all
+        results = prev_results
+    sorted_results = calculate_scores(results, args.type)
+
+    no_dups = []
+    urls = []
+    titles = []
+    descs = []
+    for res in sorted_results:
+        if res['url'] in urls:
+            continue
+        skip = False
+        for good in no_dups:
+            if len(res['title']) > 25 and ratio(res['title'], good['title']) > 0.9:
+                r = ratio(res['title'], good['title'])
+                print("Ratio: " + str(r) + " ",)
+                print(res['title'] + " vs " + good['title'])
+                skip = True
+                break
+            if len(res['description']) > 25 and ratio(res['description'], good['description']) > 0.8:
+                r = ratio(res['description'], good['description'])
+                print("Desc Ratio: " + str(r))
+                skip = True
+                break
+        if not skip:
+            no_dups.append(res)
+            descs.append(res['description'])
+            titles.append(res['title'])
+            urls.append(res['url'])
+        else:
+            print("SKIPPING " + res['title'])
+    
+    ## TODO add no_dups
+    html_content = results_to_html(no_dups)
+    no_dups.extend(prev_results)
+    if args.fetch:
+        with open('my_dict' + args.type + '.pkl', 'wb') as file:
+            pickle.dump(no_dups, file)
 
 
     if args.email:

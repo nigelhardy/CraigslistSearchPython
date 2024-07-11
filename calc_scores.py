@@ -247,6 +247,6 @@ def calc_scores(results, score_info):
                     rem_idxs.append(idx)
             else:
                 addrs[res['address']] = idx
-    filtered_list = [results[i] for i in range(len(results)) if i not in rem_idxs]
+    filtered_list = [results[i] for i in range(len(results)) if i not in rem_idxs and results[i]['score'] > 0]
     sorted_data = sorted(filtered_list, key=lambda x: x['score'], reverse=True)
     return sorted_data
