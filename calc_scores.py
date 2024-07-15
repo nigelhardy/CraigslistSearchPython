@@ -43,6 +43,114 @@ def calc_distance_sc(distance):
     score_change = ((8 - distance) * .25) - 2
     return score_change
 
+def calc_price_score_lg(price):
+    if price < 2000:
+        return -2
+    score_change = (3200 - price) / 200
+    return score_change
+
+def calc_sqr_foot_score_lg(sqr_foot):
+    if sqr_foot == -1:
+        return 0
+    score_change = (sqr_foot - 800) / 100
+    if sqr_foot < 500 or sqr_foot > 3000:
+        score_change = -5
+    score_change = min(score_change, 4)
+    return score_change
+
+def calc_distance_lg(distance):
+    if distance == -1:
+        return 0
+    score_change = ((4 - distance) * .25) - 1
+    return score_change
+
+def get_lg_scoring_info():
+    score_info = {}
+    ## Emmo's work (SA Photonics)
+    score_info['location'] = [37.2609611, -121.9611325]
+    ## These need to be full matches, not partial
+    attr_scores = {"off-street parking": 1,
+                   'street parking': -2,
+                   "attached garage": 3,
+                   "carport": -1,
+                   "3br":10,
+                   "2br":-4,
+                   "1br": -8,
+                   "0br": -12,
+                   "furnished": -2,
+                   "w/d in unit": 2,
+                   "apartment": -1,
+                   "house": 2,
+                   'cottage/cabin': 1,
+                   "townhouse": 1,
+                   "air conditioning":2,
+                   "laundry on site": 1,
+                   'laundry in bldg': 2,
+                   "ft2": calc_sqr_foot_score_lg,
+                   }
+    remove_spam_bad = { "desc": ["🆃🅴🆇🆃 ME NUMBER!!!!",
+                                 "TEXT YOUR CONTACT NOW",
+                                 "TEXT ME NUMBER!!!!",
+                                 "Luxury lobby and reception area fully attended",
+                                  "💫Pre-installed intrusion alarm"] ,
+                        "attrs": ["CENTURY 21 VERDESCHI AND WALSH REALTY.;".lower(),
+                                 "CENTURY 21 VERDESCHI AND WALSH REALTY".lower(),
+                                 ],
+                        "title": ['Rooms for rent']
+    }
+    score_info['remove'] = remove_spam_bad
+    
+    # TODO there will be some where they are a subset of another
+    # like garage, no garage, 1-car garage, etc, need to handle those!
+    # parking garage
+    # could have them be part of a group, and group can only be added once
+    # would be nice for AC and stuff that would get double counted
+
+    desc_scores = {"converted garage": -10,
+                   "no garage": -10,
+                   "garage space is not included": -10,
+                   "parking garage": -6,
+                   "garage": 5,
+                   'lots of light ': 2,
+                   "Occupancy Limit: 1 People": -5,
+                   "Utilities are not included": -2,
+                   'All utilities are included': 2,
+                   'All utilities included': 2,
+                   'Water and Garbage Included': 1,
+                   'Coin-op laundry': -1,
+                   'street parking only ': -3,
+                   'In-Home Washer/Dryer':2,
+                   'in-unit washer/dryer': 2,
+                   'Dual Pane Windows': 1,
+                   'A/C': 1,
+                   'Air Conditioning': 1,
+                   'Air Conditioner': 1,
+                   'Central HVAC': 1,
+                   '1 car garage': 3,
+                   '1-car garage': 3,
+                   'one-car garage': 3,
+                   'one car garage': 3,
+                   'two-car garage': 5,
+                   'two car garage': 5,
+                   '2 car garage':5,
+                   '2-car garage':5,
+                   'One-Car Carport': -2,
+                   'garage space used as an extra room': -2,
+                   'underground parking garage': -2,
+                   'garage log': -2,
+                   'coin operated laundry': -1,
+                   'coin-operated laundry': -1,
+                   '1 person max': -5,
+                   '1-person max': -5
+                   }
+    score_info['desc'] = desc_scores
+    title_scores = {"":2,}
+    score_info['title'] = title_scores
+    score_info['price_func'] = calc_price_score_lg
+    score_info['attrs'] = attr_scores
+    score_info['distance'] = calc_distance_lg
+    return score_info
+
 def get_sc_scoring_info():
     score_info = {}
     ## basically the location of the boardwalk
@@ -137,57 +245,9 @@ def calc_sc_scores(results):
 
 ## Convert this to the more generic style
 def calc_lg_scores(results):
-    addrs = {}
-    rem_idxs = []
-    # 37.2609611,-121.9611325
-    center_lat = 37.2609611
-    center_long = -121.9611325
-    for idx, res in enumerate(results):
-
-        price = res['price']
-
-        score = 0
-        if price != -1 and price > 2000:
-            score += (3200 - price) / 800
-        res['sqr_foot'] = -1
-        for attr in res['attributes']:
-            attr_lc = attr.lower()
-            if 'off-street parking' in attr_lc:
-                score += 1
-            if 'attached garage' in attr_lc:
-                score += 3
-            if 'carport' in attr_lc:
-                score -= 1
-            if '3br' in attr_lc:
-                score += 4
-            if '2ba' in attr_lc:
-                score += 1
-            if '0br' in attr_lc:
-                score -= 6
-            if '1br' in attr_lc:
-                score -= 5
-            if 'ft2' in attr_lc:
-                sqr_foot = int(attr_lc.split("ft2")[0])
-                score += (sqr_foot - 800) / 500
-                res['sqr_foot'] = sqr_foot
-        latitude, longitude = map(float, res['coord'].split(';'))
-        distance = haversine(center_lat, center_long, latitude, longitude)
-        score += 3 - distance
-        res['distance'] = distance
-        res['score'] = score
-        if res['address'] != '':
-            if res['address'] in addrs:
-                if score > results[addrs[res['address']]]['score']:
-                    rem_idxs.append(addrs[res['address']])
-                    addrs[res['address']] = idx
-                else:
-                    rem_idxs.append(idx)
-            else:
-                addrs[res['address']] = idx
-    filtered_list = [results[i] for i in range(len(results)) if i not in rem_idxs]
-    sorted_data = sorted(filtered_list, key=lambda x: x['score'], reverse=True)
+    score_info = get_lg_scoring_info()
+    sorted_data = calc_scores(results, score_info)
     return sorted_data
-
 
 ## TODO, create a score report card that shows the pros and cons of a listing
 # good for debugging and quickly understanding a score/listing
