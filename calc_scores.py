@@ -240,14 +240,12 @@ def get_sc_scoring_info():
 
 def calc_sc_scores(results):
     score_info = get_sc_scoring_info()
-    sorted_data = calc_scores(results, score_info)
-    return sorted_data
+    return calc_scores(results, score_info)
 
 ## Convert this to the more generic style
 def calc_lg_scores(results):
     score_info = get_lg_scoring_info()
-    sorted_data = calc_scores(results, score_info)
-    return sorted_data
+    return calc_scores(results, score_info)
 
 ## TODO, create a score report card that shows the pros and cons of a listing
 # good for debugging and quickly understanding a score/listing
@@ -293,20 +291,25 @@ def calc_scores(results, score_info):
         for item in score_info['remove']['title']:
             if item.lower() in res['title'].lower():
                 score = -1000
-        latitude, longitude = map(float, res['coord'].split(';'))
-        distance = haversine(center_lat, center_long, latitude, longitude)
-        score += score_info['distance'](distance)
+        distance = -1
+        if 'coord' in res:
+            latitude, longitude = map(float, res['coord'].split(';'))
+            distance = haversine(center_lat, center_long, latitude, longitude)
+            score += score_info['distance'](distance)
         res['distance'] = distance
         res['score'] = score
-        if res['address'] != '':
-            if res['address'] in addrs:
-                if score > results[addrs[res['address']]]['score']:
-                    rem_idxs.append(addrs[res['address']])
-                    addrs[res['address']] = idx
+        if 'address' in res:
+            if res['address'] != '':
+                if res['address'] in addrs:
+                    if score > results[addrs[res['address']]]['score']:
+                        rem_idxs.append(addrs[res['address']])
+                        addrs[res['address']] = idx
+                    else:
+                        rem_idxs.append(idx)
                 else:
-                    rem_idxs.append(idx)
-            else:
-                addrs[res['address']] = idx
+                    addrs[res['address']] = idx
     filtered_list = [results[i] for i in range(len(results)) if i not in rem_idxs and results[i]['score'] > 0]
+    unwanted_list = [results[i] for i in range(len(results)) if i in rem_idxs or results[i]['score'] <= 0]
+
     sorted_data = sorted(filtered_list, key=lambda x: x['score'], reverse=True)
-    return sorted_data
+    return sorted_data, unwanted_list
