@@ -2,6 +2,7 @@ import craigslistscraper as cs
 import json
 import time
 import os
+from dotenv import load_dotenv
 import webbrowser
 import argparse
 import pickle
@@ -12,6 +13,22 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from calc_scores import calculate_scores
 from results_to_html import results_to_html
+
+import smtplib
+from email.mime.text import MIMEText
+
+# Load environment variables from .env file (optional)
+load_dotenv()
+
+# Get credentials from environment variables
+sender_email = os.getenv("EMAIL_SENDER_ADDRESS")
+receiver_email = os.getenv("EMAIL_RECEIVER_ADDRESS")
+app_pass = os.getenv("EMAIL_PASSWORD")
+
+# Ensure the variables are loaded
+if not sender_email or not receiver_email or not app_pass:
+    raise EnvironmentError("Missing email credentials in environment variables!")
+
 ## TODO
 # send email
 # setup to run daily or periodically somehow, remember that we had to fix the library slighty
@@ -176,6 +193,7 @@ def main():
     
     ## TODO add no_dups
     html_content = results_to_html(no_dups)
+    num_new_listings = len(no_dups)
     no_dups.extend(prev_results)
     if args.fetch:
         with open('my_dict' + args.type + '.pkl', 'wb') as file:
@@ -183,22 +201,23 @@ def main():
         with open('my_unwanted' + args.type + '.pkl', 'wb') as file:
             pickle.dump(old_results_to_skip, file)
 
-    if args.email:
-        # Set up the email
-        message = MIMEMultipart()
-        message['From'] = 'your_email@example.com'
-        message['To'] = 'recipient@example.com'
-        message['Subject'] = 'Item List'
-
-        # Attach the HTML content
-        message.attach(MIMEText(html_content, 'html'))
+    if args.email and num_new_listings > 0:
+        # Create the email
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = receiver_email
+        msg['Subject'] = "New Apartment Listings!"
+        msg.attach(MIMEText(html_content, 'html'))
 
         # Send the email
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login('your_email@example.com', 'your_password')
-            server.send_message(message)
-
+        try:
+            with smtplib.SMTP('smtp.gmail.com', 587) as server:
+                server.starttls()  # Secure the connection
+                server.login(sender_email, app_pass)
+                server.sendmail(sender_email, receiver_email, msg.as_string())
+            print("Email sent successfully!")
+        except Exception as e:
+            print(f"Failed to send email: {e}")
     if args.display:
         # Write the HTML content to a file
         with open('email_preview.html', 'w', encoding='utf-8') as file:
