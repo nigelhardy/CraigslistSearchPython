@@ -23,9 +23,23 @@ def calculate_scores(results, search_type):
         return calc_lg_scores(results)
 
 def calc_price_score_sc(price):
-    if price < 2000:
+    if price < 2200 and price > 2000:
         return -2
-    score_change = (3200 - price) / 800
+    elif price <= 2000 and price > 1800:
+        return -4
+    elif price <= 1800:
+        return -10
+    score_change = 0
+    if price > 3199:
+        score_change = -3
+    elif price > 3000:
+        score_change = -1
+    elif price > 2900:
+        score_change = 0
+    elif price > 2700:
+        score_change = 2
+    elif price > 2500:
+        score_change = 4
     return score_change
 
 def calc_sqr_foot_score_sc(sqr_foot):
@@ -180,9 +194,10 @@ def get_sc_scoring_info():
                                  "TEXT ME NUMBER!!!!",
                                  "Luxury lobby and reception area fully attended",
                                   "💫Pre-installed intrusion alarm"] ,
+                                  # below use the .lower(), it checks against a lower case version
                         "attrs": ["CENTURY 21 VERDESCHI AND WALSH REALTY.;".lower(),
                                  "CENTURY 21 VERDESCHI AND WALSH REALTY".lower(),
-                                 ],
+                                 "Golden Gate Sotheby's International Realty".lower()],
                         "title": ['Rooms for rent']
     }
     score_info['remove'] = remove_spam_bad
@@ -259,8 +274,7 @@ def calc_scores(results, score_info):
     for idx, res in enumerate(results):
         price = res['price']
         score = 0
-        if price != -1 and price > 2000:
-            score += (3200 - price) / 800
+        score += score_info['price_func'](price)
         res['sqr_foot'] = -1
         for attr in res['attributes']:
             attr_lc = attr.lower()
