@@ -8,6 +8,7 @@ import argparse
 import pickle
 import smtplib
 from Levenshtein import ratio
+from datetime import datetime
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -96,7 +97,7 @@ def fetch_new_data(search_type, max_fetches, old_urls, wait_ms):
             print("NEW URL: " + ad.url)
             count += 1
         if wait_ms > 0:
-            time.sleep(wait_ms / 1000.0) 
+            time.sleep(wait_ms / 1000.0)
         # Fetch additional information about each ad. Check the status again.
         try:
             status = ad.fetch()
@@ -126,9 +127,9 @@ def main():
     parser.add_argument('--type', type=str, choices=['SC', 'LG'], default='SC', help='Type of property (SC or LG)')
     parser.add_argument('--max_fetches', type=int, default=-1, help='Max number of listings to parse')
     parser.add_argument('--wait_ms', type=int, default=-1, help='Milliseconds to wait between fetches')
-    
+
     parser.add_argument('--test-url', type=str, help='URL to test ranking/scoring')
-    
+
     args = parser.parse_args()
 
     if args.test_url:
@@ -190,8 +191,7 @@ def main():
         else:
             print("SKIPPING " + res['title'])
             old_results_to_skip.append(res['url'])
-    
-    ## TODO add no_dups
+
     html_content = results_to_html(no_dups)
     num_new_listings = len(no_dups)
     no_dups.extend(prev_results)
@@ -201,12 +201,14 @@ def main():
         with open('my_unwanted' + args.type + '.pkl', 'wb') as file:
             pickle.dump(old_results_to_skip, file)
 
+    now = datetime.now()
     if args.email and num_new_listings > 0:
         # Create the email
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = receiver_email
-        msg['Subject'] = "New Apartment Listings!"
+        # Get the current date and time
+        msg['Subject'] = "New Apartment Listings! " + now.strftime("%Y-%m-%d %H:%M:%S")
         msg.attach(MIMEText(html_content, 'html'))
 
         # Send the email
@@ -225,6 +227,8 @@ def main():
 
         # Open the HTML file in the default web browser
         webbrowser.open('email_preview.html')
+    print("Done. " + now.strftime("%Y-%m-%d %H:%M:%S"))
 
 if __name__ == "__main__":
     main()
+
