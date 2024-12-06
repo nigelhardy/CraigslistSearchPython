@@ -3,16 +3,16 @@ import math
 def haversine(lat1, lon1, lat2, lon2):
     # Convert latitude and longitude from degrees to radians
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-    
+
     # Haversine formula
     dlon = lon2 - lon1
     dlat = lat2 - lat1
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     c = 2 * math.asin(math.sqrt(a))
-    
+
     # Radius of Earth in kilometers (use 3956 for miles)
     r = 6371
-    
+
     # Calculate the result and convert to miles
     return c * r * 0.62137273665
 
@@ -109,11 +109,12 @@ def get_lg_scoring_info():
                                   "💫Pre-installed intrusion alarm"] ,
                         "attrs": ["CENTURY 21 VERDESCHI AND WALSH REALTY.;".lower(),
                                  "CENTURY 21 VERDESCHI AND WALSH REALTY".lower(),
+                                 "BRAZEN MANAGEMENT CORP".lower(),
                                  ],
                         "title": ['Rooms for rent']
     }
     score_info['remove'] = remove_spam_bad
-    
+
     # TODO there will be some where they are a subset of another
     # like garage, no garage, 1-car garage, etc, need to handle those!
     # parking garage
@@ -197,11 +198,12 @@ def get_sc_scoring_info():
                                   # below use the .lower(), it checks against a lower case version
                         "attrs": ["CENTURY 21 VERDESCHI AND WALSH REALTY.;".lower(),
                                  "CENTURY 21 VERDESCHI AND WALSH REALTY".lower(),
+                                 "BRAZEN MANAGEMENT CORP".lower(),
                                  "Golden Gate Sotheby's International Realty".lower()],
                         "title": ['Rooms for rent']
     }
     score_info['remove'] = remove_spam_bad
-    
+
     # TODO there will be some where they are a subset of another
     # like garage, no garage, 1-car garage, etc, need to handle those!
     # parking garage
