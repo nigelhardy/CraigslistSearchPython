@@ -1,0 +1,5 @@
+.env
+*.pkl
+email_preview.html
+__pycache__
+.DS_Store
