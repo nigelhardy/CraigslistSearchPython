@@ -1,4 +1,4 @@
-Overview
+# Overview
 
 This is a generic Craigslist scraper and ranking system designed to automatically find and rank listings based on custom criteria. The system uses a plugin-based architecture that supports multiple search types:
 
