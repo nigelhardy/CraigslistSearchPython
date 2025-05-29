@@ -15,16 +15,17 @@ def results_to_html(sorted_results):
     """
 
     for item in sorted_results:
+        distance_str = f"{round(item['distance'],1)} mi." if item.get('distance') is not None else "N/A"
         table_html += f"""
-    <tr>
-        <td><strong><a href="{item['url']}" target="_blank">{item['title']}</a></strong></td>
-        <td>{item['description']}</td>
-        <td align="center">{round(item['score'],1)}</td>
-        <td align="right">${item['price']:,}</td>
-        <td align="right">{round(item['distance'],1)} mi.</td>
-        <td align="right">{item['sqr_foot']:,} sq ft</td>
-    </tr>
-    """
+            <tr>
+                <td><strong><a href="{item['url']}" target="_blank">{item['title']}</a></strong></td>
+                <td>{item['description']}</td>
+                <td align="center">{round(item['score'],1)}</td>
+                <td align="right">${item['price']:,}</td>
+                <td align="right">{distance_str}</td>
+                <td align="right">{item['sqr_foot']:,} sq ft</td>
+            </tr>
+            """
 
     table_html += "</table>"
 

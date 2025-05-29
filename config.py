@@ -1,9 +1,9 @@
 """
-Configuration settings for Craigslist rental scraper.
+Configuration settings for Craigslist scraper.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 @dataclass
@@ -11,9 +11,10 @@ class SearchConfig:
     """Configuration for a specific search area."""
     query: str
     city: str
-    category: str
+    categories: List[str]  # Now supports multiple categories
     filters: Dict[str, Any]
     name: str
+    description: str
 
 
 class Config:
@@ -24,25 +25,38 @@ class Config:
         "SC": SearchConfig(
             query="",
             city="sfbay",
-            category="apa",
+            categories=["apa"],
             filters={
                 "max_price": 3300,
                 "lat": 36.9677,
                 "lon": -121.985,
                 "search_distance": 10,
             },
-            name="Santa Cruz"
+            name="Santa Cruz",
+            description="Santa Cruz apartment search near boardwalk"
         ),
         "LG": SearchConfig(
             query="",
             city="sfbay", 
-            category="apa",
+            categories=["apa"],
             filters={
                 "max_price": 4000,
                 "postal": 95030,
                 "search_distance": 5
             },
-            name="Los Gatos"
+            name="Los Gatos",
+            description="Los Gatos apartment search near work"
+        ),
+        "E39_PARTS": SearchConfig(
+            query="BMW E39 540i",
+            city="sfbay",
+            categories=["pta", "wta"],  # auto parts and wheels/tires (correct codes)
+            filters={
+                "max_price": 1000,  # Reasonable max for most parts
+                "min_price": 10,    # Avoid super cheap junk
+            },
+            name="BMW E39 Parts", 
+            description="BMW E39 540i parts search in multiple categories"
         )
     }
     
@@ -65,6 +79,9 @@ class Config:
     DEFAULT_MAX_FETCHES = -1  # -1 means no limit
     DEFAULT_WAIT_MS = -1      # -1 means no wait
     DEFAULT_SEARCH_TYPE = "SC"
+    
+    # Available search types for CLI
+    AVAILABLE_SEARCH_TYPES = list(SEARCH_CONFIGS.keys())
     
     # Rate limiting and error handling
     MAX_CONSECUTIVE_FAILS = 5

@@ -21,10 +21,10 @@ import craigslistscraper as cs
 from dotenv import load_dotenv
 from Levenshtein import ratio
 
-from calc_scores import calculate_scores
 from config import Config, get_search_config, get_data_file_path, get_unwanted_file_path
 from logger_config import setup_logger
-from results_to_html import results_to_html
+from ranking_system import RankingAlgorithmRegistry
+from plugin_manager import initialize_ranking_algorithms
 
 
 class EmailService:
@@ -189,10 +189,10 @@ class ListingScraper:
         wait_ms: int
     ) -> List[Dict]:
         """
-        Fetch new listings from Craigslist.
+        Fetch new listings from Craigslist across multiple categories.
         
         Args:
-            search_type: Type of search (SC or LG)
+            search_type: Type of search (SC, LG, E39_PARTS, etc.)
             max_fetches: Maximum number of listings to fetch (-1 for no limit)
             existing_urls: URLs to skip (already processed)
             wait_ms: Milliseconds to wait between requests
@@ -202,22 +202,33 @@ class ListingScraper:
         """
         config = get_search_config(search_type)
         self.logger.info(f"Starting {config.name} search with filters: {config.filters}")
+        self.logger.info(f"Searching categories: {config.categories}")
         
-        # Create and execute search
-        search = cs.Search(
-            query=config.query,
-            city=config.city,
-            category=config.category
-        )
+        all_ads = []
         
-        status = search.fetch(params=config.filters)
-        if status != 200:
-            raise Exception(f"Unable to fetch search with status {status}")
+        # Search each category
+        for category in config.categories:
+            self.logger.info(f"Searching category: {category}")
+            
+            # Create and execute search for this category
+            search = cs.Search(
+                query=config.query,
+                city=config.city,
+                category=category
+            )
+            
+            status = search.fetch(params=config.filters)
+            if status != 200:
+                self.logger.warning(f"Unable to fetch category {category} with status {status}")
+                continue
+            
+            self.logger.info(f"Found {len(search.ads)} listings in category {category}")
+            all_ads.extend(search.ads)
         
-        self.logger.info(f"Found {len(search.ads)} listings from search")
+        self.logger.info(f"Total listings found across all categories: {len(all_ads)}")
         
         return self._process_search_results(
-            search.ads, max_fetches, existing_urls, wait_ms
+            all_ads, max_fetches, existing_urls, wait_ms
         )
     
     def _process_search_results(
@@ -339,8 +350,8 @@ class ListingScraper:
         return False
 
 
-class CraigslistRentalScraper:
-    """Main application class for the Craigslist rental scraper."""
+class CraigslistScraper:
+    """Main application class for the Craigslist scraper."""
     
     def __init__(self):
         """Initialize the main application."""
@@ -348,6 +359,9 @@ class CraigslistRentalScraper:
         self.scraper = ListingScraper()
         self.data_manager = DataManager()
         self.email_service = self._setup_email_service()
+        
+        # Initialize ranking algorithms
+        initialize_ranking_algorithms()
     
     def _setup_email_service(self) -> Optional[EmailService]:
         """Set up email service if credentials are available."""
@@ -398,8 +412,11 @@ class CraigslistRentalScraper:
                 new_listings = previous_results
                 self.logger.info("Using cached results (no fetch requested)")
             
-            # Score and filter listings
-            sorted_listings, unwanted_listings = calculate_scores(new_listings, args.type) # type: ignore
+            # Score and filter listings using ranking algorithm
+            ranking_algorithm = RankingAlgorithmRegistry.get_algorithm(args.type)
+            ranking_result = ranking_algorithm.calculate_scores(new_listings)
+            sorted_listings = ranking_result.sorted_listings
+            unwanted_listings = ranking_result.unwanted_listings
             
             # Remove duplicates
             unique_listings, duplicate_urls = self.scraper.remove_duplicates(sorted_listings)
@@ -411,8 +428,8 @@ class CraigslistRentalScraper:
                 duplicate_urls
             )
             
-            # Generate output
-            html_content = results_to_html(unique_listings)
+            # Generate output using algorithm-specific HTML formatting
+            html_content = ranking_algorithm.format_results_to_html(unique_listings)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             # Save data if fetching new results
@@ -422,7 +439,7 @@ class CraigslistRentalScraper:
                 self.data_manager.save_unwanted_urls(args.type, new_unwanted_urls)
             
             # Handle output options
-            self._handle_output(args, html_content, timestamp, len(unique_listings))
+            self._handle_output(args, html_content, timestamp, len(unique_listings), ranking_algorithm, unique_listings)
             
             self.logger.info(f"Processing complete at {timestamp}")
             
@@ -431,8 +448,8 @@ class CraigslistRentalScraper:
             raise
     
     def _handle_output(self, args: argparse.Namespace, html_content: str, 
-                      timestamp: str, num_new_listings: int) -> None:
-        """Handle email and display output options."""
+                      timestamp: str, num_new_listings: int, ranking_algorithm, listings: List[Dict]) -> None:
+        """Handle email, display, and console output options."""
         # Send email if requested and there are new listings
         if args.email and num_new_listings > 0 and self.email_service:
             self.email_service.send_listing_email(html_content, timestamp)
@@ -444,6 +461,10 @@ class CraigslistRentalScraper:
         # Display in browser if requested
         if args.display:
             self._display_results_in_browser(html_content)
+        
+        # Display in console if requested
+        if args.console:
+            self._display_results_in_console(ranking_algorithm, listings)
     
     def _display_results_in_browser(self, html_content: str) -> None:
         """Display results in the default web browser."""
@@ -454,19 +475,36 @@ class CraigslistRentalScraper:
             self.logger.info("Results opened in browser")
         except Exception as e:
             self.logger.error(f"Error displaying results in browser: {e}")
+    
+    def _display_results_in_console(self, ranking_algorithm, listings: List[Dict]) -> None:
+        """Display results in console with nicely formatted table."""
+        try:
+            console_output = ranking_algorithm.format_results_to_console(listings)
+            print("\n" + "="*80)
+            print(f"🔍 {ranking_algorithm.search_type} SEARCH RESULTS")
+            print("="*80)
+            print(console_output)
+            print("="*80)
+        except Exception as e:
+            self.logger.error(f"Error displaying results in console: {e}")
+            print("Error displaying console results. Check logs for details.")
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the command line argument parser."""
     parser = argparse.ArgumentParser(
-        description='Professional Craigslist rental scraper with scoring and notifications',
+        description='Professional Craigslist scraper with ranking and notifications',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --fetch --type SC                    # Fetch new Santa Cruz listings
+  %(prog)s --fetch --type SC                    # Fetch new Santa Cruz apartment listings
   %(prog)s --fetch --email --type LG           # Fetch Los Gatos listings and email
+  %(prog)s --fetch --type E39_PARTS             # Fetch BMW E39 parts listings
   %(prog)s --display --type SC                 # Display cached results in browser  
+  %(prog)s --console --type SC                 # Display results in formatted console table
+  %(prog)s --fetch --console --type E39_PARTS  # Fetch and show in console (debugging)
   %(prog)s --test-url "https://..."            # Test scoring for specific URL
+  %(prog)s --list-types                        # List available search types
         """
     )
     
@@ -486,11 +524,21 @@ Examples:
         help='Display HTML results in default web browser'
     )
     parser.add_argument(
+        '--console',
+        action='store_true',
+        help='Display formatted results table in console/terminal (great for debugging)'
+    )
+    parser.add_argument(
         '--type', 
         type=str, 
-        choices=['SC', 'LG'], 
+        choices=Config.AVAILABLE_SEARCH_TYPES, 
         default=Config.DEFAULT_SEARCH_TYPE, 
-        help='Search area type: SC (Santa Cruz) or LG (Los Gatos)'
+        help='Search type: SC (Santa Cruz apartments), LG (Los Gatos apartments), E39_PARTS (BMW E39 parts)'
+    )
+    parser.add_argument(
+        '--list-types',
+        action='store_true',
+        help='List all available search types and exit'
     )
     parser.add_argument(
         '--max_fetches', 
@@ -525,12 +573,20 @@ def main() -> None:
     parser = create_argument_parser()
     args = parser.parse_args()
     
+    # Handle list-types command
+    if getattr(args, 'list_types', False):
+        initialize_ranking_algorithms()
+        print("Available search types:")
+        for search_type, config in Config.SEARCH_CONFIGS.items():
+            print(f"  {search_type:12} - {config.description}")
+        return
+    
     # Setup logging
     logger = setup_logger(__name__, args.log_level)
     logger.info(f"Starting {Config.APP_NAME} v{Config.VERSION}")
     
     try:
-        app = CraigslistRentalScraper()
+        app = CraigslistScraper()
         app.run(args)
     except KeyboardInterrupt:
         logger.info("Application interrupted by user")
