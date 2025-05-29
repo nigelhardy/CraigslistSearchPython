@@ -17,31 +17,31 @@ The application searches multiple Craigslist categories simultaneously, scores l
 ### Running the Application
 ```bash
 # List available search types
-python santa-cruz-craigslist.py --list-types
+python craigslist_ranker.py --list-types
 
 # Fetch new data for Santa Cruz apartments
-python santa-cruz-craigslist.py --fetch --type SC
+python craigslist_ranker.py --fetch --type SC
 
 # Fetch new data for Los Gatos apartments  
-python santa-cruz-craigslist.py --fetch --type LG
+python craigslist_ranker.py --fetch --type LG
 
 # Fetch BMW E39 parts listings
-python santa-cruz-craigslist.py --fetch --type E39_PARTS
+python craigslist_ranker.py --fetch --type E39_PARTS
 
 # Send email with results (requires .env file with email credentials)
-python santa-cruz-craigslist.py --fetch --email --type SC
+python craigslist_ranker.py --fetch --email --type SC
 
 # Display results in browser
-python santa-cruz-craigslist.py --display --type SC
+python craigslist_ranker.py --display --type SC
 
 # Display results in console (great for debugging)
-python santa-cruz-craigslist.py --console --type SC
+python craigslist_ranker.py --console --type SC
 
 # Fetch and immediately show in console
-python santa-cruz-craigslist.py --fetch --console --type E39_PARTS
+python craigslist_ranker.py --fetch --console --type E39_PARTS
 
 # Test a specific listing URL
-python santa-cruz-craigslist.py --test-url "https://sfbay.craigslist.org/scz/apa/d/..."
+python craigslist_ranker.py --test-url "https://sfbay.craigslist.org/scz/apa/d/..."
 ```
 
 ### Dependencies
@@ -53,7 +53,7 @@ pip install -r requirements.txt
 
 ### Core Components
 
-**santa-cruz-craigslist.py**: Main entry point that orchestrates the entire workflow - fetching, scoring, deduplication, email generation, and data persistence using pickle files.
+**craigslist_ranker.py**: Main entry point that orchestrates the entire workflow - fetching, scoring, deduplication, email generation, and data persistence using pickle files.
 
 **craigslistscraper/**: Custom scraping library
 - `search.py`: Handles Craigslist search queries and returns lists of ads
