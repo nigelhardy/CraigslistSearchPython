@@ -19,7 +19,7 @@ class SearchConfig:
 
 class Config:
     """Main configuration class containing all application settings."""
-    
+
     # Search configurations
     SEARCH_CONFIGS = {
         "SC": SearchConfig(
@@ -37,7 +37,7 @@ class Config:
         ),
         "LG": SearchConfig(
             query="",
-            city="sfbay", 
+            city="sfbay",
             categories=["apa"],
             filters={
                 "max_price": 4000,
@@ -48,48 +48,48 @@ class Config:
             description="Los Gatos apartment search near work"
         ),
         "E39_PARTS": SearchConfig(
-            query="BMW E39 540i",
+            query="e39",
             city="sfbay",
             categories=["pta", "wta"],  # auto parts and wheels/tires (correct codes)
             filters={
                 "max_price": 1000,  # Reasonable max for most parts
                 "min_price": 10,    # Avoid super cheap junk
             },
-            name="BMW E39 Parts", 
+            name="BMW E39 Parts",
             description="BMW E39 540i parts search in multiple categories"
         )
     }
-    
+
     # File paths and naming
     DATA_FILE_TEMPLATE = "listings_{}.pkl"
     UNWANTED_FILE_TEMPLATE = "unwanted_listings_{}.pkl"
     HTML_PREVIEW_FILE = "email_preview.html"
-    
+
     # Email settings
     SMTP_SERVER = "smtp.gmail.com"
     SMTP_PORT = 587
     EMAIL_SUBJECT_TEMPLATE = "New Apartment Listings! {}"
-    
+
     # Environment variable names
     ENV_SENDER_EMAIL = "EMAIL_SENDER_ADDRESS"
     ENV_RECEIVER_EMAIL = "EMAIL_RECEIVER_ADDRESS"
     ENV_EMAIL_PASSWORD = "EMAIL_PASSWORD"
-    
+
     # Default application settings
     DEFAULT_MAX_FETCHES = -1  # -1 means no limit
     DEFAULT_WAIT_MS = -1      # -1 means no wait
     DEFAULT_SEARCH_TYPE = "SC"
-    
+
     # Available search types for CLI
     AVAILABLE_SEARCH_TYPES = list(SEARCH_CONFIGS.keys())
-    
+
     # Rate limiting and error handling
     MAX_CONSECUTIVE_FAILS = 5
     SIMILARITY_THRESHOLD_TITLE = 0.9
     SIMILARITY_THRESHOLD_DESC = 0.8
     MIN_TITLE_LENGTH_FOR_SIMILARITY = 25
     MIN_DESC_LENGTH_FOR_SIMILARITY = 25
-    
+
     # Application metadata
     APP_NAME = "Craigslist Rental Scraper"
     VERSION = "1.0.0"
