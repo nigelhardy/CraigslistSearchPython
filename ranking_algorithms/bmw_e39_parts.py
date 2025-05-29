@@ -32,16 +32,30 @@ class BMWE39PartsRanking(BaseRankingAlgorithm):
             "title": [
                 "PARTING OUT",  # Usually overpriced or junk
                 "CASH FOR CARS",
-                "WE BUY CARS",
+                "WE BUY CARS", 
                 "SCRAP",
-                "SALVAGE TITLE"
+                "SALVAGE TITLE",
+                "ALL MAKES",  # Generic dealer listings
+                "ALL MODELS",
+                "USED EUROPEAN PARTS ALL MAKES",
+                "AUTO DISMANTLER",
+                "PARTS DEALER"
             ],
             "description": [
                 "As-is condition",
-                "Sold as scrap",
+                "Sold as scrap", 
                 "For parts only - not working",
                 "Does not work",
-                "Broken beyond repair"
+                "Broken beyond repair",
+                # Generic dealer patterns
+                "licensed auto dismantler",
+                "we are a licensed",
+                "specializing in mercedes-benz and other european makes",
+                "we provide shipping we provide shipping",  # Repeated spam text
+                "call for availability and pricing",
+                "we have thousands of parts",
+                "all european makes and models",
+                "huge inventory of parts"
             ],
             "attributes": []
         }
@@ -110,6 +124,9 @@ class BMWE39PartsRanking(BaseRankingAlgorithm):
         
         # High-value parts scoring
         score += self._calculate_high_value_parts_score(listing)
+        
+        # Generic dealer penalty scoring
+        score += self._calculate_generic_dealer_penalty(listing)
         
         return score
     
@@ -283,6 +300,70 @@ class BMWE39PartsRanking(BaseRankingAlgorithm):
                 score += points
         
         return score
+    
+    def _calculate_generic_dealer_penalty(self, listing: Dict) -> float:
+        """Penalize listings that appear to be generic dealer spam."""
+        title = listing.get('title', '').lower()
+        description = listing.get('description', '').lower()
+        combined_text = f"{title} {description}"
+        
+        penalty = 0.0
+        
+        # Count how many different car brands/models are mentioned
+        car_brands = [
+            'mercedes', 'audi', 'porsche', 'volkswagen', 'vw', 'volvo', 
+            'saab', 'jaguar', 'land rover', 'mini', 'smart', 'fiat',
+            'alfa romeo', 'maserati', 'ferrari', 'lamborghini', 'bentley'
+        ]
+        
+        brands_mentioned = sum(1 for brand in car_brands if brand in combined_text)
+        if brands_mentioned >= 5:
+            penalty -= 15  # Heavy penalty for multi-brand spam
+        elif brands_mentioned >= 3:
+            penalty -= 8   # Medium penalty
+        
+        # Penalty for excessive model year ranges
+        if any(pattern in combined_text for pattern in [
+            '1990-2020', '1995-2022', '2000-2023', '1985-2015'
+        ]):
+            penalty -= 10
+        
+        # Penalty for generic dealer language
+        dealer_phrases = [
+            'call for pricing', 'call for availability', 'thousands of parts',
+            'huge inventory', 'we stock', 'we carry', 'licensed dismantler',
+            'auto recycler', 'salvage yard', 'we ship nationwide',
+            'all makes and models', 'european specialist'
+        ]
+        
+        dealer_phrase_count = sum(1 for phrase in dealer_phrases if phrase in combined_text)
+        penalty -= dealer_phrase_count * 2
+        
+        # Penalty for suspiciously low prices on complex parts
+        price = listing.get('price', 0)
+        if price > 0 and price < 20:
+            # Check if claiming to sell expensive parts for cheap
+            expensive_parts = [
+                'transmission', 'engine', 'turbo', 'supercharger', 
+                'navigation', 'ecu', 'computer', 'airbag'
+            ]
+            if any(part in combined_text for part in expensive_parts):
+                penalty -= 10  # Very suspicious
+        
+        # Penalty for keyword stuffing (too many technical terms)
+        technical_terms = [
+            'alternator', 'starter', 'radiator', 'compressor', 'pump',
+            'sensor', 'module', 'valve', 'filter', 'belt', 'hose',
+            'brake', 'clutch', 'differential', 'axle', 'suspension'
+        ]
+        
+        tech_term_count = sum(1 for term in technical_terms if term in combined_text)
+        if tech_term_count > 15:
+            penalty -= 12  # Keyword stuffing penalty
+        elif tech_term_count > 10:
+            penalty -= 6
+        
+        return penalty
     
     def _extract_year(self, listing: Dict) -> Optional[int]:
         """Extract year from listing if available."""
