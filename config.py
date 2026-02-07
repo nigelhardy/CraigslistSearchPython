@@ -57,6 +57,38 @@ class Config:
             },
             name="BMW E39 Parts",
             description="BMW E39 540i parts search in multiple categories"
+        ),
+        "SUBARU_FORESTER_BRAKES": SearchConfig(
+            query="subaru brakes",
+            city="sfbay",
+            categories=["pts", "wta", "pta"],  # Auto parts, wheels/tires, all parts
+            filters={},  # No price limits as requested
+            name="Subaru Forester Brakes",
+            description="SF Bay Area + West Coast Subaru brake upgrade parts search - 1st gen Forester compatible"
+        ),
+        "SUBARU_FORESTER_SUSPENSION": SearchConfig(
+            query="forester suspension",
+            city="sfbay", 
+            categories=["pts", "wta", "pta"],  # Auto parts, wheels/tires, all parts
+            filters={},  # No price limits
+            name="Subaru Forester Suspension", 
+            description="SF Bay Area + West Coast Subaru suspension upgrade parts search - 1st gen Forester compatible"
+        ),
+        "SUBARU_PERFORMANCE": SearchConfig(
+            query="subaru forester impreza wrx sti coilovers rally racing seats brakes tires performance parts auto wrecker parts car",
+            city="sfbay",
+            categories=["pts", "wta", "pta"],  # Auto parts, wheels/tires, all parts
+            filters={},  # No price limits as requested
+            name="Subaru Performance Parts",
+            description="Wide Subaru performance parts search - coilovers, rally, racing, STI, 1997-2004 Forester priority"
+        ),
+        "SUBARU_FORESTER": SearchConfig(
+            query="subaru forester",
+            city="sfbay",
+            categories=["cto"],  # Cars and trucks by owner
+            filters={},  # No price limits as requested
+            name="Subaru Forester Cars",
+            description="1st gen Forester search - manual transmission, low mileage, one owner, non-turbo, affordable"
         )
     }
 
@@ -77,7 +109,7 @@ class Config:
 
     # Default application settings
     DEFAULT_MAX_FETCHES = -1  # -1 means no limit
-    DEFAULT_WAIT_MS = -1      # -1 means no wait
+    DEFAULT_WAIT_MS = 5000     # 5 second default wait to avoid rate limiting
     DEFAULT_SEARCH_TYPE = "SC"
 
     # Available search types for CLI

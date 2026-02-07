@@ -1,0 +1,16 @@
+searches:
+  subaru_forester:
+    query: "subaru forester manual"
+    categories: ["cto"]
+    cities: ["sfbay"]
+    max_pages: 3
+
+scoring:
+  subaru_forester:
+    manual_transmission: 25
+    low_mileage_under_100k: 15
+    first_gen_1997_2004: 20
+    clean_title: 10
+    automatic_transmission: -10
+    turbo_engine: -10
+    high_mileage_over_150k: -5

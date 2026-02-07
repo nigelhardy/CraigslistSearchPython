@@ -130,23 +130,34 @@ class DataManager:
             self.logger.error(f"Error loading unwanted URLs: {e}")
             return []
     
-    def save_results(self, search_type: str, results: List[Dict]) -> bool:
+    def save_results(self, search_type: str, results: List[Dict], save_all: bool = True) -> bool:
         """
         Save listing results to file.
         
         Args:
             search_type: Type of search (SC or LG)
             results: List of listing dictionaries to save
+            save_all: Whether to save all results (True) or only positive results (False)
             
         Returns:
             True if saved successfully, False otherwise
         """
         file_path = get_data_file_path(search_type)
+        
+        # Choose filename based on save_all flag
+        if save_all:
+            file_path = file_path.replace('.pkl', '_all.pkl')
+        
         try:
             with open(file_path, 'wb') as file:
                 pickle.dump(results, file)
-            self.logger.info(f"Saved {len(results)} results to {file_path}")
+            
+            file_type = "all results" if save_all else "positive results only"
+            self.logger.info(f"Saved {len(results)} results ({file_type}) to {file_path}")
             return True
+        except Exception as e:
+            self.logger.error(f"Error saving results: {e}")
+            return False
         except Exception as e:
             self.logger.error(f"Error saving results: {e}")
             return False
@@ -189,7 +200,7 @@ class ListingScraper:
         wait_ms: int
     ) -> List[Dict]:
         """
-        Fetch new listings from Craigslist across multiple categories.
+        Fetch new listings from Craigslist across multiple categories and areas.
         
         Args:
             search_type: Type of search (SC, LG, E39_PARTS, etc.)
@@ -204,32 +215,75 @@ class ListingScraper:
         self.logger.info(f"Starting {config.name} search with filters: {config.filters}")
         self.logger.info(f"Searching categories: {config.categories}")
         
+        # Define multi-area search strategy for Subaru parts and cars
+        if search_type in ["SUBARU_FORESTER_BRAKES", "SUBARU_FORESTER_SUSPENSION", "SUBARU_PERFORMANCE", "SUBARU_FORESTER"]:
+            cities = self._get_multi_area_cities(search_type)
+        else:
+            cities = [config.city]  # Single city for other search types
+        
         all_ads = []
         
-        # Search each category
-        for category in config.categories:
-            self.logger.info(f"Searching category: {category}")
+        for city in cities:
+            city_ads = []
+            self.logger.info(f"Searching in {city}...")
             
-            # Create and execute search for this category
-            search = cs.Search(
-                query=config.query,
-                city=config.city,
-                category=category
-            )
+            # Search each category
+            for category in config.categories:
+                self.logger.info(f"Searching {city} category: {category}")
+                
+                # Create and execute search for this category and city
+                search = cs.Search(
+                    query=config.query,
+                    city=city,
+                    category=category
+                )
+                
+                status = search.fetch(params=config.filters)
+                if status != 200:
+                    self.logger.warning(f"Unable to fetch {city} category {category} with status {status}")
+                    continue
+                
+                self.logger.info(f"Found {len(search.ads)} listings in {city} category {category}")
+                city_ads.extend(search.ads)
             
-            status = search.fetch(params=config.filters)
-            if status != 200:
-                self.logger.warning(f"Unable to fetch category {category} with status {status}")
-                continue
+            # Store city info for later use in scoring
+            for ad in city_ads:
+                ad.search_city = city
             
-            self.logger.info(f"Found {len(search.ads)} listings in category {category}")
-            all_ads.extend(search.ads)
+            all_ads.extend(city_ads)
+            
+            # Break early if we hit max_fetches
+            if max_fetches != -1 and len(all_ads) >= max_fetches:
+                self.logger.info(f"Reached max fetches limit: {max_fetches}")
+                break
         
-        self.logger.info(f"Total listings found across all categories: {len(all_ads)}")
+        self.logger.info(f"Total listings found across all areas: {len(all_ads)}")
         
         return self._process_search_results(
             all_ads, max_fetches, existing_urls, wait_ms
         )
+    
+    def _get_multi_area_cities(self, search_type: str) -> List[str]:
+        """
+        Get list of cities for multi-area Subaru parts searches.
+        
+        Args:
+            search_type: Type of search
+            
+        Returns:
+            List of Craigslist city codes in priority order
+        """
+        # Priority order: Local -> Regional -> National
+        return [
+            "sfbay",        # Primary: SF Bay Area (local preference)
+            "losangeles",    # Secondary: SoCal
+            "portland",      # Secondary: Pacific Northwest  
+            "seattle",       # Secondary: Pacific Northwest
+            "sacramento",    # Secondary: Northern California
+            "denver",        # Tertiary: Mountain region
+            "phoenix",       # Tertiary: Southwest
+            "lasvegas"       # Tertiary: Southwest
+        ]
     
     def _process_search_results(
         self, 
@@ -274,6 +328,8 @@ class ListingScraper:
             # Fetch detailed ad information
             listing_data = self._fetch_ad_details(ad)
             if listing_data:
+                # Add city information for geographic preference scoring
+                listing_data['search_city'] = getattr(ad, 'search_city', None)
                 results.append(listing_data)
             else:
                 fails += 1
@@ -429,13 +485,23 @@ class CraigslistScraper:
             )
             
             # Generate output using algorithm-specific HTML formatting
-            html_content = ranking_algorithm.format_results_to_html(unique_listings)
+            # For HTML, always show all results when --show-all flag is used
+            if getattr(args, 'show_all', False):
+                # Show ALL results (positive + negative)
+                display_listings = unique_listings + unwanted_listings
+                # Sort all by score (highest to lowest)
+                display_listings.sort(key=lambda x: x.get('score', 0), reverse=True)
+            else:
+                # Default: Show only positive results for clean HTML output
+                display_listings = unique_listings
+            
+            html_content = ranking_algorithm.format_results_to_html(display_listings)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             # Save data if fetching new results
             if args.fetch:
                 combined_results = unique_listings + previous_results
-                self.data_manager.save_results(args.type, combined_results)
+                self.data_manager.save_results(args.type, combined_results, save_all=getattr(args, 'save_all_results', True))
                 self.data_manager.save_unwanted_urls(args.type, new_unwanted_urls)
             
             # Handle output options
@@ -464,7 +530,7 @@ class CraigslistScraper:
         
         # Display in console if requested
         if args.console:
-            self._display_results_in_console(ranking_algorithm, listings)
+            self._display_results_in_console(ranking_algorithm, listings, show_all=getattr(args, 'show_all', False))
     
     def _display_results_in_browser(self, html_content: str) -> None:
         """Display results in the default web browser."""
@@ -476,12 +542,30 @@ class CraigslistScraper:
         except Exception as e:
             self.logger.error(f"Error displaying results in browser: {e}")
     
-    def _display_results_in_console(self, ranking_algorithm, listings: List[Dict]) -> None:
+    def _display_results_in_console(self, ranking_algorithm, listings: List[Dict], show_all: bool = False) -> None:
         """Display results in console with nicely formatted table."""
         try:
-            console_output = ranking_algorithm.format_results_to_console(listings)
+            # Filter listings for console display based on show_all flag
+            if show_all:
+                display_listings = listings  # Show all
+            else:
+                # Show only positive scoring listings
+                min_threshold = ranking_algorithm.get_minimum_score_threshold()
+                display_listings = [l for l in listings if l.get('score', 0) > min_threshold]
+            
+            console_output = ranking_algorithm.format_results_to_console(display_listings)
+            
             print("\n" + "="*80)
             print(f"🔍 {ranking_algorithm.search_type} SEARCH RESULTS")
+            if show_all:
+                print("="*80)
+                print("🔧 Showing ALL results (positive and negative scores)")
+                print("📊 Use --show-all flag to see scoring breakdown")
+            else:
+                print("="*80)
+                print("📋 Showing positive results only")
+                print("🔧 Use --show-all flag to see negative results and scoring breakdown")
+            
             print("="*80)
             print(console_output)
             print("="*80)
@@ -563,6 +647,18 @@ Examples:
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
         default='INFO',
         help='Set logging level'
+    )
+    parser.add_argument(
+        '--save-all-results',
+        action='store_true',
+        default=True,
+        help='Save ALL results to file (default: True). Set to False to save only positive results'
+    )
+    parser.add_argument(
+        '--show-all',
+        action='store_true',
+        default=False,
+        help='Show ALL results in console including negative scores (default: False)'
     )
     
     return parser

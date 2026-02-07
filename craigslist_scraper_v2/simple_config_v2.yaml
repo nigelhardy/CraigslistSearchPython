@@ -1,0 +1,43 @@
+searches:
+  subaru_forester:
+    query: "subaru forester"
+    categories: ["cto"]
+    cities: ["sfbay"]
+    max_pages: 3
+    
+    scoring:
+      # Each rule has keywords (list) and points (can be positive or negative)
+      # Case insensitive matching in title + description
+      
+      - keywords: ["manual", "5-speed", "5 speed", "6-speed", "6 speed", "standard transmission"]
+        points: 25
+      
+      - keywords: ["first gen", "sf5", "1998", "1999", "2000", "2001", "2002", "2003", "2004"]
+        points: 20
+      
+      - keywords: ["low miles", "low mileage", "under 100k", "under 80k", "under 60k"]
+        points: 15
+      
+      - keywords: ["clean title", "title in hand"]
+        points: 10
+      
+      - keywords: ["rust free", "no rust", "garage kept"]
+        points: 8
+      
+      - keywords: ["awd", "all wheel drive", "4x4", "4wd"]
+        points: 5
+      
+      - keywords: ["automatic", "auto", "cvt", "cvt transmission"]
+        points: -10
+      
+      - keywords: ["turbo", "xt", "2.5t", "wrx engine swap"]
+        points: -15
+      
+      - keywords: ["salvage", "salvage title", "rebuilt title", "flood damage"]
+        points: -25
+      
+      - keywords: ["dealer", "dealership", "lot", "financing available"]
+        points: -20
+      
+      - keywords: ["needs work", "project", "parts car", "mechanic special"]
+        points: -15
