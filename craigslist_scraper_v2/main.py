@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Craigslist Scraper v2 - Extensible Listing Types
-Clean architecture with support for multiple listing types (Vehicle, Bicycle, etc.)
+Craigslist Scraper v2 - Fetcher Abstraction
+Clean architecture with Protocol-based fetcher for testability.
 """
 
 import requests
@@ -11,11 +11,169 @@ import yaml
 import argparse
 from enum import Enum, auto
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional, Set, Type
+from typing import List, Dict, Any, Optional, Set, Type, Protocol
 from datetime import datetime
 from pathlib import Path
 from bs4 import BeautifulSoup
 import re
+
+
+# ============================================================================
+# FETCHER PROTOCOL AND CONFIGURATION
+# ============================================================================
+
+@dataclass
+class FetcherConfig:
+    """Configuration for fetcher behavior."""
+    delay_ms: int = 5000
+    max_retries: int = 3
+
+
+class Fetcher(Protocol):
+    """Abstract protocol for fetching Craigslist data.
+    
+    Implementations:
+    - CraigslistFetcher: Real HTTP with rate limiting
+    - FileFetcher: Test fetcher reading from saved HTML files
+    """
+    
+    def fetch_search_page(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch a search result page and return parsed HTML."""
+        ...
+    
+    def fetch_listing_detail(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch an individual listing detail page and return parsed HTML."""
+        ...
+
+
+class CraigslistFetcher:
+    """Real HTTP fetcher for Craigslist with built-in rate limiting."""
+    
+    def __init__(self, config: FetcherConfig):
+        self.config = config
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        })
+        self._last_request_time = 0.0
+    
+    def _rate_limit(self) -> None:
+        """Enforce rate limiting between requests."""
+        current_time = time.time() * 1000
+        time_since_last = current_time - self._last_request_time
+        
+        if time_since_last < self.config.delay_ms:
+            wait_time = (self.config.delay_ms - time_since_last) / 1000
+            print(f"⏱️  Rate limiting: waiting {wait_time:.2f}s")
+            time.sleep(wait_time)
+        
+        self._last_request_time = time.time() * 1000
+    
+    def _fetch_with_retry(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch URL with retry logic."""
+        for attempt in range(self.config.max_retries):
+            try:
+                self._rate_limit()
+                print(f"🌐 Fetching: {url}")
+                
+                response = self.session.get(url, timeout=30)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Handle loading state
+                if 'loading' in soup.get_text().lower():
+                    time.sleep(3)
+                    self._rate_limit()
+                    response = self.session.get(url, timeout=30)
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                
+                return soup
+                
+            except Exception as e:
+                print(f"❌ Attempt {attempt + 1}/{self.config.max_retries} failed: {e}")
+                if attempt < self.config.max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    return None
+        
+        return None
+    
+    def fetch_search_page(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch a search result page."""
+        return self._fetch_with_retry(url)
+    
+    def fetch_listing_detail(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch an individual listing detail page."""
+        return self._fetch_with_retry(url)
+
+
+class FileFetcher:
+    """Test fetcher that reads from saved HTML files instead of making HTTP requests."""
+    
+    def __init__(self, data_dir: Path):
+        self.data_dir = data_dir
+        print(f"📁 FileFetcher initialized with data dir: {data_dir}")
+    
+    def _load_html_file(self, filename: str) -> Optional[BeautifulSoup]:
+        """Load HTML from file."""
+        file_path = self.data_dir / filename
+        
+        if not file_path.exists():
+            print(f"⚠️  File not found: {file_path}")
+            return None
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            print(f"📄 Loaded from file: {filename}")
+            return BeautifulSoup(content, 'html.parser')
+        except Exception as e:
+            print(f"❌ Error reading file {filename}: {e}")
+            return None
+    
+    def fetch_search_page(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch search page from saved file.
+        
+        Expected filename format: search_<query>_<page>.html
+        """
+        # Extract query and page from URL for filename
+        # URL format: https://city.craigslist.org/search/cto?query=xxx&s=120
+        # Stub implementation - user can customize filename mapping
+        print(f"📁 [TEST MODE] Would load search page for: {url}")
+        # TODO: Implement filename mapping logic
+        return None
+    
+    def fetch_listing_detail(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch listing detail from saved file.
+        
+        Expected filename format: listing_<id>.html
+        """
+        # Extract listing ID from URL
+        # URL format: https://city.craigslist.org/xxx/cto/d/title/id.html
+        # Stub implementation - user can customize filename mapping
+        print(f"📁 [TEST MODE] Would load listing detail for: {url}")
+        # TODO: Implement filename mapping logic
+        return None
+
+
+def create_fetcher(config: FetcherConfig, mode: str = "live", data_dir: Optional[Path] = None) -> Fetcher:
+    """Factory function to create appropriate fetcher.
+    
+    Args:
+        config: Fetcher configuration
+        mode: "live" for real HTTP, "test" for file-based
+        data_dir: Required for test mode, directory containing saved HTML files
+    
+    Returns:
+        Fetcher implementation
+    """
+    if mode == "test":
+        if data_dir is None:
+            raise ValueError("data_dir required for test mode")
+        return FileFetcher(data_dir)
+    else:
+        return CraigslistFetcher(config)
 
 
 # ============================================================================
@@ -281,58 +439,11 @@ def load_previous_results(storage_path: Path, clear: bool = False) -> ListingSto
 # STEP 3: FETCH QUERY PAGES
 # ============================================================================
 
-class RateLimiter:
-    """Ensures minimum delay between requests."""
-    
-    def __init__(self, delay_ms: int):
-        self.delay_ms = delay_ms
-        self._last_request_time = 0.0
-    
-    def wait(self) -> None:
-        """Wait if necessary to respect rate limit."""
-        current_time = time.time() * 1000
-        time_since_last = current_time - self._last_request_time
-        
-        if time_since_last < self.delay_ms:
-            wait_time = (self.delay_ms - time_since_last) / 1000
-            print(f"⏱️  Rate limiting: waiting {wait_time:.2f}s")
-            time.sleep(wait_time)
-        
-        self._last_request_time = time.time() * 1000
-
-
 class SearchEngine:
-    """Fetches data from Craigslist."""
+    """Fetches data from Craigslist using any Fetcher implementation."""
     
-    def __init__(self, rate_limiter: RateLimiter):
-        self.rate_limiter = rate_limiter
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-        })
-    
-    def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
-        """Fetch and parse a single page."""
-        try:
-            self.rate_limiter.wait()
-            print(f"🌐 Fetching: {url}")
-            
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Handle loading state
-            if 'loading' in soup.get_text().lower():
-                time.sleep(3)
-                self.rate_limiter.wait()
-                response = self.session.get(url, timeout=30)
-                soup = BeautifulSoup(response.content, 'html.parser')
-            
-            return soup
-        except Exception as e:
-            print(f"❌ Error fetching {url}: {e}")
-            return None
+    def __init__(self, fetcher: Fetcher):
+        self.fetcher = fetcher
     
     def fetch_search_pages(self, config: SearchConfig) -> List[Listing]:
         """
@@ -349,7 +460,7 @@ class SearchEngine:
                     params = {'query': config.query, 's': page_num * 120}
                     search_url = f"{base_url}?" + "&".join([f"{k}={v}" for k, v in params.items()])
                     
-                    soup = self._fetch_page(search_url)
+                    soup = self.fetcher.fetch_search_page(search_url)
                     if not soup:
                         break
                     
@@ -416,9 +527,9 @@ class SearchEngine:
             return None
 
 
-def fetch_query_pages(config: SearchConfig, rate_limiter: RateLimiter) -> List[Listing]:
+def fetch_query_pages(config: SearchConfig, fetcher: Fetcher) -> List[Listing]:
     """Step 3: Fetch search pages, return list of Listings (basic info only)."""
-    engine = SearchEngine(rate_limiter)
+    engine = SearchEngine(fetcher)
     return engine.fetch_search_pages(config)
 
 
@@ -442,7 +553,7 @@ def fetch_listings(
     urls: List[str],
     search_listings: List[Listing],
     config: SearchConfig,
-    rate_limiter: RateLimiter,
+    fetcher: Fetcher,
     storage: ListingStorage,
     limit: Optional[int] = None
 ) -> List[Listing]:
@@ -451,7 +562,6 @@ def fetch_listings(
         urls = urls[:limit]
         print(f"📋 Fetching {len(urls)} listings (limited)")
     
-    engine = SearchEngine(rate_limiter)
     new_listings = []
     
     # Create lookup from URL to search listing for basic info
@@ -466,7 +576,7 @@ def fetch_listings(
             continue
         
         # Fetch and parse details
-        listing = fetch_single_listing(engine, base_listing, config.listing_type)
+        listing = fetch_single_listing(fetcher, base_listing, config.listing_type)
         if listing:
             new_listings.append(listing)
             storage.add_listing(listing)
@@ -476,9 +586,9 @@ def fetch_listings(
     return new_listings
 
 
-def fetch_single_listing(engine: SearchEngine, base_listing: Listing, listing_type: str) -> Optional[Listing]:
+def fetch_single_listing(fetcher: Fetcher, base_listing: Listing, listing_type: str) -> Optional[Listing]:
     """Fetch and parse details for a single listing."""
-    soup = engine._fetch_page(base_listing.url)
+    soup = fetcher.fetch_listing_detail(base_listing.url)
     if not soup:
         return None
     
@@ -783,6 +893,10 @@ def parse_args():
     parser.add_argument('--output', type=str, default='', help='Output HTML filename')
     parser.add_argument('--config', type=str, default='simple_config_v2.yaml', 
                        help='Config file path')
+    parser.add_argument('--mode', type=str, default='live', choices=['live', 'test'],
+                       help='Run mode: live (real HTTP) or test (read from files)')
+    parser.add_argument('--test-data-dir', type=str, default='test_data',
+                       help='Directory containing test HTML files (for test mode)')
     return parser.parse_args()
 
 
@@ -804,19 +918,28 @@ def main():
     storage_path = Path(__file__).parent / config.storage_filename
     storage = load_previous_results(storage_path, clear=args.clear)
     
+    # Create fetcher based on mode
+    fetcher_config = FetcherConfig(delay_ms=5000, max_retries=3)
+    
+    if args.mode == "test":
+        test_data_dir = Path(__file__).parent / args.test_data_dir
+        fetcher = create_fetcher(fetcher_config, mode="test", data_dir=test_data_dir)
+    else:
+        fetcher = create_fetcher(fetcher_config, mode="live")
+    
     # Steps 3-5 (only if --fetch specified)
     if args.fetch is not None:
-        rate_limiter = RateLimiter(5000)
+        print(f"🔎 Fetch mode: {'unlimited' if args.fetch <= 0 else args.fetch} new listings\n")
         
         # Step 3: Fetch search pages
-        search_listings = fetch_query_pages(config, rate_limiter)
+        search_listings = fetch_query_pages(config, fetcher)
         
         # Step 4: Filter URLs
         new_urls = filter_new_urls(search_listings, storage)
         
         # Step 5: Fetch listing details
         limit = args.fetch if args.fetch > 0 else None
-        fetch_listings(new_urls, search_listings, config, rate_limiter, storage, limit=limit)
+        fetch_listings(new_urls, search_listings, config, fetcher, storage, limit=limit)
     else:
         print("📂 Display mode: showing existing listings\n")
     
