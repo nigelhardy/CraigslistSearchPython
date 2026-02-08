@@ -1,426 +1,846 @@
 #!/usr/bin/env python3
 """
-Simple Craigslist Scraper v2 - Phase 1
-Basic search and scoring for Subaru Foresters with manual transmission preference.
+Craigslist Scraper v2 - Extensible Listing Types
+Clean architecture with support for multiple listing types (Vehicle, Bicycle, etc.)
 """
 
 import requests
 import time
-import logging
-from bs4 import BeautifulSoup
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
-import re
-from datetime import datetime
+import json
 import yaml
-from pathlib import Path
 import argparse
+from enum import Enum, auto
+from dataclasses import dataclass, field, asdict
+from typing import List, Dict, Any, Optional, Set, Type
+from datetime import datetime
+from pathlib import Path
+from bs4 import BeautifulSoup
+import re
 
+
+# ============================================================================
+# LISTING STATE ENUM
+# ============================================================================
+
+class ListingState(Enum):
+    """Tracks the processing state of a listing."""
+    URL_ONLY = auto()      # Just have URL from search page
+    HTML_PARSED = auto()   # Fetched and parsed HTML details
+    RANKED = auto()        # Has been scored
+
+
+# ============================================================================
+# BASE LISTING CLASS
+# ============================================================================
 
 @dataclass
-class CraigslistListing:
+class Listing:
+    """Pure data container for Craigslist listing information."""
+    # Core fields (always present)
     url: str
     title: str
     price: Optional[int]
     location: str
     city: str
     category: str
+    
+    # State tracking
+    state: ListingState = field(default=ListingState.URL_ONLY)
+    
+    # Fields populated during HTML parsing (optional)
     description: Optional[str] = None
-    image_urls: Optional[List[str]] = None
-    attributes: Optional[Dict[str, Any]] = None
     posted_date: Optional[str] = None
-    vin: Optional[str] = None
+    images: List[str] = field(default_factory=list)
+    
+    # Fields populated during ranking (optional until ranked)
+    score: float = field(default=0.0)
+    score_breakdown: Dict[str, float] = field(default_factory=dict)
+    score_reasons: List[str] = field(default_factory=list)
+    
+    # Metadata
+    first_seen: Optional[str] = None
+    last_updated: Optional[str] = None
+    
+    # Type discriminator for serialization
+    listing_type: str = field(default="base")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary."""
+        data = asdict(self)
+        # Convert enum to string for JSON serialization
+        data['state'] = self.state.name
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Listing':
+        """Deserialize from dictionary."""
+        # Handle state enum conversion
+        state_name = data.get('state', 'URL_ONLY')
+        if isinstance(state_name, str):
+            data['state'] = ListingState[state_name]
+        
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+# ============================================================================
+# VEHICLE LISTING CLASS
+# ============================================================================
+
+@dataclass
+class VehicleListing(Listing):
+    """Vehicle-specific listing with automotive fields."""
+    
+    # Vehicle-specific fields
     mileage: Optional[int] = None
     transmission: Optional[str] = None
-    condition: Optional[str] = None
     title_status: Optional[str] = None
+    vin: Optional[str] = None
+    condition: Optional[str] = None
+    year: Optional[int] = None
+    make: Optional[str] = None
+    model: Optional[str] = None
     
     def __post_init__(self):
-        if self.image_urls is None:
-            self.image_urls = []
-        if self.attributes is None:
-            self.attributes = {}
+        """Set type discriminator after initialization."""
+        if self.listing_type == "base":
+            self.listing_type = "vehicle"
+
+
+# ============================================================================
+# LISTING TYPE REGISTRY
+# ============================================================================
+
+LISTING_TYPE_MAP: Dict[str, Type[Listing]] = {
+    "base": Listing,
+    "vehicle": VehicleListing,
+}
+
+
+def create_listing_from_dict(data: Dict[str, Any]) -> Listing:
+    """Factory function to create correct listing type from dictionary."""
+    listing_type = data.get('listing_type', 'base')
+    listing_class = LISTING_TYPE_MAP.get(listing_type, Listing)
+    
+    # Handle state enum conversion
+    state_name = data.get('state', 'URL_ONLY')
+    if isinstance(state_name, str):
+        data['state'] = ListingState[state_name]
+    
+    return listing_class(**{k: v for k, v in data.items() 
+                           if k in listing_class.__dataclass_fields__})
+
+
+# ============================================================================
+# CONFIGURATION CLASSES
+# ============================================================================
+
+@dataclass
+class ScoringRule:
+    """Single scoring rule with keywords and points."""
+    keywords: List[str]
+    points: int
 
 
 @dataclass
-class ScoreResult:
-    total_score: float
-    breakdown: Dict[str, float]
-    reasons: List[str]
+class SearchConfig:
+    """Configuration for a single search type."""
+    query: str
+    categories: List[str]
+    cities: List[str]
+    max_pages: int
+    storage_filename: str
+    listing_type: str  # "vehicle", "bicycle", etc.
+    scoring_rules: List[ScoringRule]
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SearchConfig':
+        """Create SearchConfig from YAML dictionary."""
+        storage = data.get('storage', {})
+        scoring_data = data.get('scoring', [])
+        
+        scoring_rules = []
+        for rule in scoring_data:
+            scoring_rules.append(ScoringRule(
+                keywords=rule.get('keywords', []),
+                points=rule.get('points', 0)
+            ))
+        
+        return cls(
+            query=data.get('query', ''),
+            categories=data.get('categories', []),
+            cities=data.get('cities', []),
+            max_pages=data.get('max_pages', 3),
+            storage_filename=storage.get('filename', 'listings.json'),
+            listing_type=data.get('listing_type', 'base'),
+            scoring_rules=scoring_rules
+        )
 
 
-class CraigslistSearchEngine:
-    def __init__(self, delay_ms: int = 5000):
-        self.delay_ms = delay_ms
-        self.session = requests.Session()
-        self.last_request_time = 0
+# ============================================================================
+# STEP 1: LOAD CONFIG
+# ============================================================================
+
+def load_config(config_path: Path) -> SearchConfig:
+    """Step 1: Load YAML config for queries, ranking, and storage."""
+    with open(config_path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f)
     
-    def _wait_for_rate_limit(self):
-        current_time = time.time() * 1000
-        time_since_last_request = current_time - self.last_request_time
-        
-        if time_since_last_request < self.delay_ms:
-            wait_time = (self.delay_ms - time_since_last_request) / 1000
-            print(f"Rate limiting: waiting {wait_time:.2f} seconds")
-            time.sleep(wait_time)
-        
-        self.last_request_time = time.time() * 1000
+    search_data = data['searches']['subaru_forester']
+    return SearchConfig.from_dict(search_data)
+
+
+# ============================================================================
+# STEP 2: LOAD PREVIOUS RESULTS
+# ============================================================================
+
+class ListingStorage:
+    """Manages persistent storage of listings."""
     
-    def _make_request(self, url: str) -> Optional[BeautifulSoup]:
+    def __init__(self, storage_path: Path):
+        self.storage_path = storage_path
+        self._listings: Dict[str, Listing] = {}
+        self._load()
+    
+    def _load(self) -> None:
+        """Load existing listings from storage file."""
+        if not self.storage_path.exists():
+            print(f"📂 No existing storage found at {self.storage_path}")
+            return
+        
         try:
-            self._wait_for_rate_limit()
-            print(f"Fetching: {url}")
+            with open(self.storage_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
+            for listing_data in data.get('listings', []):
+                listing = create_listing_from_dict(listing_data)
+                self._listings[listing.url] = listing
+            
+            print(f"📂 Loaded {len(self._listings)} listings from storage")
+        except Exception as e:
+            print(f"⚠️  Error loading storage: {e}")
+            self._listings = {}
+    
+    def save(self) -> None:
+        """Save listings to storage file."""
+        try:
+            data = {
+                'listings': [listing.to_dict() for listing in self._listings.values()],
+                'last_updated': datetime.now().isoformat(),
+                'total_count': len(self._listings)
             }
             
-            response = self.session.get(url, timeout=30, headers=headers)
-            response.raise_for_status()
+            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.storage_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, default=str)
             
-            time.sleep(2)
+            print(f"💾 Saved {len(self._listings)} listings to {self.storage_path}")
+        except Exception as e:
+            print(f"❌ Error saving storage: {e}")
+    
+    def is_seen(self, url: str) -> bool:
+        """Check if a URL has been seen before."""
+        return url in self._listings
+    
+    def get_seen_urls(self) -> Set[str]:
+        """Get set of all seen URLs."""
+        return set(self._listings.keys())
+    
+    def add_listing(self, listing: Listing) -> bool:
+        """Add a new listing to storage. Returns True if added, False if already exists."""
+        if listing.url in self._listings:
+            return False
+        
+        if listing.first_seen is None:
+            listing.first_seen = datetime.now().isoformat()
+        
+        listing.last_updated = datetime.now().isoformat()
+        self._listings[listing.url] = listing
+        return True
+    
+    def get_all_listings(self) -> List[Listing]:
+        """Get all stored listings."""
+        return list(self._listings.values())
+    
+    def clear(self) -> None:
+        """Clear all stored listings."""
+        self._listings = {}
+        if self.storage_path.exists():
+            self.storage_path.unlink()
+        print("🗑️  Storage cleared")
+
+
+def load_previous_results(storage_path: Path, clear: bool = False) -> ListingStorage:
+    """Step 2: Load previous listings from disk."""
+    storage = ListingStorage(storage_path)
+    if clear:
+        storage.clear()
+    return storage
+
+
+# ============================================================================
+# STEP 3: FETCH QUERY PAGES
+# ============================================================================
+
+class RateLimiter:
+    """Ensures minimum delay between requests."""
+    
+    def __init__(self, delay_ms: int):
+        self.delay_ms = delay_ms
+        self._last_request_time = 0.0
+    
+    def wait(self) -> None:
+        """Wait if necessary to respect rate limit."""
+        current_time = time.time() * 1000
+        time_since_last = current_time - self._last_request_time
+        
+        if time_since_last < self.delay_ms:
+            wait_time = (self.delay_ms - time_since_last) / 1000
+            print(f"⏱️  Rate limiting: waiting {wait_time:.2f}s")
+            time.sleep(wait_time)
+        
+        self._last_request_time = time.time() * 1000
+
+
+class SearchEngine:
+    """Fetches data from Craigslist."""
+    
+    def __init__(self, rate_limiter: RateLimiter):
+        self.rate_limiter = rate_limiter
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        })
+    
+    def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch and parse a single page."""
+        try:
+            self.rate_limiter.wait()
+            print(f"🌐 Fetching: {url}")
+            
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
+            # Handle loading state
             if 'loading' in soup.get_text().lower():
-                print("Page still loading, waiting...")
                 time.sleep(3)
-                response = self.session.get(url, timeout=30, headers=headers)
+                self.rate_limiter.wait()
+                response = self.session.get(url, timeout=30)
                 soup = BeautifulSoup(response.content, 'html.parser')
             
             return soup
         except Exception as e:
-            print(f"Error fetching {url}: {e}")
+            print(f"❌ Error fetching {url}: {e}")
             return None
     
-    def search_city(self, city: str, category: str, query: str, max_pages: int = 2, max_fetch: int = 10) -> List[CraigslistListing]:
+    def fetch_search_pages(self, config: SearchConfig) -> List[Listing]:
+        """
+        Step 3: Fetch search result pages and extract listing summaries.
+        Returns list of Listings (basic info only, state=URL_ONLY).
+        """
         listings = []
-        base_url = f"https://{city}.craigslist.org/search/{category}"
         
-        for page in range(max_pages):
-            params = {
-                'query': query,
-                's': page * 120
-            }
-            
-            search_url = f"{base_url}?" + "&".join([f"{k}={v}" for k, v in params.items()])
-            soup = self._make_request(search_url)
-            
-            if not soup:
-                continue
-            
-            listing_elements = soup.find_all('li', class_='cl-static-search-result')
-            print(f"Found {len(listing_elements)} cl-static-search-result elements")
-            
-            # Calculate how many to process from this page
-            remaining = max_fetch - len(listings)
-            if remaining <= 0:
-                break
-            
-            to_process = min(remaining, len(listing_elements))
-            
-            for element in listing_elements[:to_process]:
-                listing = self._extract_listing(element, city, category)
-                if listing:
-                    detailed = self._fetch_details(listing)
-                    listings.append(detailed)
-                    print(f"  Found: {listing.title}")
-            
-            if len(listings) >= max_fetch:
-                break
+        for city in config.cities:
+            for category in config.categories:
+                base_url = f"https://{city}.craigslist.org/search/{category}"
+                
+                for page_num in range(config.max_pages):
+                    params = {'query': config.query, 's': page_num * 120}
+                    search_url = f"{base_url}?" + "&".join([f"{k}={v}" for k, v in params.items()])
+                    
+                    soup = self._fetch_page(search_url)
+                    if not soup:
+                        break
+                    
+                    elements = soup.find_all('li', class_='cl-static-search-result')
+                    print(f"📄 Page {page_num + 1} ({city}/{category}): Found {len(elements)} listings")
+                    
+                    if not elements:
+                        break
+                    
+                    for element in elements:
+                        listing = self._parse_search_result(element, city, category, config.listing_type)
+                        if listing:
+                            listings.append(listing)
         
-        return listings[:max_fetch]
+        print(f"✅ Total search results: {len(listings)}")
+        return listings
     
-    def _extract_listing(self, element, city: str, category: str) -> Optional[CraigslistListing]:
+    def _parse_search_result(self, element, city: str, category: str, listing_type: str) -> Optional[Listing]:
+        """Parse a single search result element into appropriate Listing type."""
         try:
             url_elem = element.find("a")
             if not url_elem:
                 return None
             
             url = url_elem["href"]
-            title_elem = element.find(class_ = "title")
+            title_elem = element.find(class_="title")
             if not title_elem:
                 return None
             
             title = title_elem.text
             
-            price_elem = element.find(class_ = "price")
             price = None
+            price_elem = element.find(class_="price")
             if price_elem and price_elem.text:
                 price_text = price_elem.text.replace('$', '').replace(',', '')
                 try:
                     price = int(price_text)
                 except ValueError:
-                    price = None
+                    pass
             
-            return CraigslistListing(
-                url=url,
-                title=title,
-                price=price,
-                location=city,
-                city=city,
-                category=category
-            )
+            # Create appropriate listing type
+            if listing_type == "vehicle":
+                return VehicleListing(
+                    url=url,
+                    title=title,
+                    price=price,
+                    location=city,
+                    city=city,
+                    category=category,
+                    state=ListingState.URL_ONLY
+                )
+            else:
+                return Listing(
+                    url=url,
+                    title=title,
+                    price=price,
+                    location=city,
+                    city=city,
+                    category=category,
+                    state=ListingState.URL_ONLY
+                )
         except Exception as e:
-            print(f"Error extracting listing: {e}")
+            print(f"⚠️  Error parsing result: {e}")
             return None
+
+
+def fetch_query_pages(config: SearchConfig, rate_limiter: RateLimiter) -> List[Listing]:
+    """Step 3: Fetch search pages, return list of Listings (basic info only)."""
+    engine = SearchEngine(rate_limiter)
+    return engine.fetch_search_pages(config)
+
+
+# ============================================================================
+# STEP 4: FILTER NEW URLS
+# ============================================================================
+
+def filter_new_urls(listings: List[Listing], storage: ListingStorage) -> List[str]:
+    """Step 4: Filter existing URLs (remove duplicates from this run and previous)."""
+    seen = storage.get_seen_urls()
+    new_urls = [l.url for l in listings if l.url not in seen]
+    print(f"🔍 Filtered {len(new_urls)} new URLs from {len(listings)} total")
+    return new_urls
+
+
+# ============================================================================
+# STEP 5: FETCH INDIVIDUAL LISTINGS
+# ============================================================================
+
+def fetch_listings(
+    urls: List[str],
+    search_listings: List[Listing],
+    config: SearchConfig,
+    rate_limiter: RateLimiter,
+    storage: ListingStorage,
+    limit: Optional[int] = None
+) -> List[Listing]:
+    """Step 5: Fetch individual listings from URL list, limited by --fetch X."""
+    if limit:
+        urls = urls[:limit]
+        print(f"📋 Fetching {len(urls)} listings (limited)")
     
-    def _fetch_details(self, listing: CraigslistListing) -> CraigslistListing:
-        soup = self._make_request(listing.url)
-        if not soup:
-            return listing
+    engine = SearchEngine(rate_limiter)
+    new_listings = []
+    
+    # Create lookup from URL to search listing for basic info
+    search_lookup = {l.url: l for l in search_listings}
+    
+    for i, url in enumerate(urls, 1):
+        print(f"  [{i}/{len(urls)}] Fetching details...")
         
-        try:
-            desc_elem = soup.find('section', {'id': 'postingbody'})
-            if desc_elem:
-                listing.description = desc_elem.get_text(strip=True)
-            
-            attr_groups = soup.find_all('p', class_='attrgroup')
-            for group in attr_groups:
-                spans = group.find_all('span')
-                for span in spans:
-                    text = span.get_text(strip=True)
-                    if ':' in text:
-                        key, value = text.split(':', 1)
-                        key = key.strip().lower()
-                        value = value.strip()
-                        
-                        if key in ['odometer', 'mileage']:
-                            try:
-                                listing.mileage = int(value.replace(',', ''))
-                            except ValueError:
-                                pass
-                        elif key in ['transmission']:
-                            listing.transmission = value.lower()
-                        elif key in ['title status']:
-                            listing.title_status = value.lower()
-                        
-                        if listing.attributes is not None:
-                            listing.attributes[key] = value
-        except Exception as e:
-            print(f"Error fetching details: {e}")
+        # Get base listing from search results
+        base_listing = search_lookup.get(url)
+        if not base_listing:
+            continue
         
+        # Fetch and parse details
+        listing = fetch_single_listing(engine, base_listing, config.listing_type)
+        if listing:
+            new_listings.append(listing)
+            storage.add_listing(listing)
+            storage.save()  # Incremental save
+    
+    print(f"✅ Fetched {len(new_listings)} new listings")
+    return new_listings
+
+
+def fetch_single_listing(engine: SearchEngine, base_listing: Listing, listing_type: str) -> Optional[Listing]:
+    """Fetch and parse details for a single listing."""
+    soup = engine._fetch_page(base_listing.url)
+    if not soup:
+        return None
+    
+    try:
+        # Parse description
+        desc_elem = soup.find('section', {'id': 'postingbody'})
+        description = desc_elem.get_text(strip=True) if desc_elem else None
+        
+        # Parse common fields
+        images = []
+        posted_date = None
+        
+        # Parse date
+        time_elem = soup.find('time', class_='date timeago')
+        if time_elem:
+            datetime_val = time_elem.get('datetime')
+            posted_date = str(datetime_val) if datetime_val else None
+        
+        # Parse images
+        for img in soup.find_all('img'):
+            src = img.get('src')
+            if src and 'craigslist.org' in src:
+                images.append(src)
+        
+        # Parse attributes
+        mileage = None
+        transmission = None
+        title_status = None
+        vin = None
+        condition = None
+        year = None
+        
+        attr_groups = soup.find_all('p', class_='attrgroup')
+        for group in attr_groups:
+            for span in group.find_all('span'):
+                text = span.get_text(strip=True)
+                if ':' in text:
+                    key, value = text.split(':', 1)
+                    key = key.strip().lower()
+                    value = value.strip()
+                    
+                    if key in ['odometer', 'mileage']:
+                        try:
+                            mileage = int(value.replace(',', ''))
+                        except (ValueError, AttributeError):
+                            mileage = None
+                    elif key == 'transmission':
+                        transmission = value.lower() if value else None
+                    elif key == 'title status':
+                        title_status = value.lower() if value else None
+                    elif key == 'vin':
+                        vin = value
+                    elif key == 'condition':
+                        condition = value.lower() if value else None
+        
+        # Extract year from title
+        year_match = re.search(r'\b(19|20)\d{2}\b', base_listing.title)
+        if year_match:
+            try:
+                year = int(year_match.group())
+            except (ValueError, AttributeError):
+                year = None
+        
+        # Create appropriate listing type with all details
+        if listing_type == "vehicle":
+            listing = VehicleListing(
+                url=base_listing.url,
+                title=base_listing.title,
+                price=base_listing.price,
+                location=base_listing.location,
+                city=base_listing.city,
+                category=base_listing.category,
+                state=ListingState.HTML_PARSED,
+                description=description,
+                posted_date=posted_date,
+                images=images,
+                mileage=mileage,
+                transmission=transmission,
+                title_status=title_status,
+                vin=vin,
+                condition=condition,
+                year=year
+            )
+        else:
+            listing = Listing(
+                url=base_listing.url,
+                title=base_listing.title,
+                price=base_listing.price,
+                location=base_listing.location,
+                city=base_listing.city,
+                category=base_listing.category,
+                state=ListingState.HTML_PARSED,
+                description=description,
+                posted_date=posted_date,
+                images=images
+            )
+        
+        listing.last_updated = datetime.now().isoformat()
         return listing
+        
+    except Exception as e:
+        print(f"❌ Error parsing details: {e}")
+        return None
 
 
-class SimpleScorer:
-    def __init__(self, search_config: Dict[str, Any]):
-        # Scoring is now a flat list of rules with points (positive or negative)
-        self.scoring_rules = search_config.get('scoring', [])
+# ============================================================================
+# STEP 6: RANK LISTINGS
+# ============================================================================
+
+class ListingRanker:
+    """Ranks listings based on configuration rules."""
     
-    def score_listings(self, listings: List[CraigslistListing]) -> List[ScoreResult]:
-        results = []
+    def __init__(self, scoring_rules: List[ScoringRule]):
+        self.scoring_rules = scoring_rules
+    
+    def rank(self, listings: List[Listing]) -> List[Listing]:
+        """Step 6: Rank listings by calculating scores. Modifies listings in place."""
         for listing in listings:
-            score_result = self.score_listing(listing)
-            results.append(score_result)
-        return results
+            try:
+                self._calculate_score(listing)
+            except Exception as e:
+                print(f"⚠️  Error ranking listing {listing.url}: {e}")
+                listing.score = 0.0
+                listing.score_reasons = ["Error during ranking"]
+        
+        # Sort by score descending
+        return sorted(listings, key=lambda x: x.score, reverse=True)
     
-    def score_listing(self, listing: CraigslistListing) -> ScoreResult:
+    def _calculate_score(self, listing: Listing) -> None:
+        """Calculate score for a single listing safely."""
+        # Build searchable text, handling None values
+        text_parts = []
+        if listing.title:
+            text_parts.append(listing.title)
+        if listing.description:
+            text_parts.append(listing.description)
+        
+        # Add vehicle-specific fields if available
+        if isinstance(listing, VehicleListing):
+            if listing.transmission:
+                text_parts.append(listing.transmission)
+            if listing.title_status:
+                text_parts.append(listing.title_status)
+            if listing.condition:
+                text_parts.append(listing.condition)
+        
+        searchable_text = ' '.join(text_parts).lower()
+        
         score = 0.0
         breakdown = {}
         reasons = []
         
-        # Combine title and description for searching
-        title_lower = listing.title.lower()
-        desc_lower = (listing.description or '').lower()
-        searchable_text = title_lower + " " + desc_lower
-        
-        # Check all keyword rules
         for rule in self.scoring_rules:
-            keywords = rule.get('keywords', [])
-            points = rule.get('points', 0)
-            
-            for keyword in keywords:
+            for keyword in rule.keywords:
                 if keyword.lower() in searchable_text:
-                    score += points
-                    breakdown[keyword] = points
-                    # Format reason based on positive or negative points
-                    if points >= 0:
-                        reasons.append(f"'{keyword}' (+{points})")
+                    score += rule.points
+                    breakdown[keyword] = rule.points
+                    
+                    if rule.points >= 0:
+                        reasons.append(f"'{keyword}' (+{rule.points})")
                     else:
-                        reasons.append(f"'{keyword}' ({points})")
-                    break  # Only count once per rule
+                        reasons.append(f"'{keyword}' ({rule.points})")
+                    break  # Only count first match per rule
         
-        return ScoreResult(
-            total_score=score,
-            breakdown=breakdown,
-            reasons=reasons
-        )
+        # Set on listing object
+        listing.score = score
+        listing.score_breakdown = breakdown
+        listing.score_reasons = reasons
+        listing.state = ListingState.RANKED
+        listing.last_updated = datetime.now().isoformat()
 
 
-def generate_html(listings, score_results, query):
-    scored_listings = sorted(zip(listings, score_results), 
-                            key=lambda x: x[1].total_score, reverse=True)
+def rank_listings(listings: List[Listing], scoring_rules: List[ScoringRule]) -> List[Listing]:
+    """Step 6: Rank each listing based on scoring rules."""
+    ranker = ListingRanker(scoring_rules)
+    return ranker.rank(listings)
+
+
+# ============================================================================
+# STEP 7: DISPLAY LISTINGS
+# ============================================================================
+
+def display_listings(
+    listings: List[Listing],
+    query: str,
+    output_path: Optional[Path] = None
+) -> Path:
+    """Step 7: Display listings based on rank in HTML output."""
+    html = generate_html(listings, query)
     
+    if output_path is None:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_path = Path(f"search_results_{timestamp}.html")
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(html)
+    
+    print(f"💾 HTML saved to: {output_path}")
+    return output_path
+
+
+def generate_html(listings: List[Listing], query: str) -> str:
+    """Generate HTML for ranked listings."""
     html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Craigslist Search Results - {query}</title>
+    <title>Craigslist Search - {query}</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-        th {{ background-color: #f2f2f2; }}
-        .score-positive {{ color: green; font-weight: bold; }}
-        .score-negative {{ color: red; }}
+        body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }}
+        h1 {{ color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }}
+        .meta {{ color: #666; margin-bottom: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th {{ background: #4CAF50; color: white; padding: 12px; text-align: left; }}
+        td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
+        tr:hover {{ background: #f9f9f9; }}
+        .score {{ font-weight: bold; font-size: 1.2em; }}
+        .score-high {{ color: #4CAF50; }}
+        .score-medium {{ color: #FF9800; }}
+        .score-low {{ color: #f44336; }}
+        .price {{ color: #4CAF50; font-weight: bold; }}
+        .reasons {{ font-size: 0.9em; color: #666; }}
+        .details {{ font-size: 0.85em; color: #888; }}
     </style>
 </head>
 <body>
-    <h1>🔍 Craigslist Search Results</h1>
-    <p><strong>Query:</strong> {query}</p>
-    <p><strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-    <p><strong>Listings Found:</strong> {len(listings)}</p>
+    <div class="container">
+        <h1>🔍 {query}</h1>
+        <div class="meta">
+            Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 
+            Total Listings: {len(listings)}
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Score</th>
+                    <th>Title</th>
+                    <th>Price</th>
+                    <th>Details</th>
+                    <th>Reasons</th>
+                </tr>
+            </thead>
+            <tbody>"""
     
-    <table>
-        <thead>
-            <tr>
-                <th>Score</th>
-                <th>Title</th>
-                <th>Price</th>
-                <th>Mileage</th>
-                <th>Transmission</th>
-                <th>Reasons</th>
-            </tr>
-        </thead>
-        <tbody>"""
-    
-    for listing, score_result in scored_listings:
-        score_class = "score-positive" if score_result.total_score > 0 else "score-negative"
+    for i, listing in enumerate(listings, 1):
+        # Score styling
+        if listing.score >= 20:
+            score_class = "score-high"
+        elif listing.score >= 0:
+            score_class = "score-medium"
+        else:
+            score_class = "score-low"
+        
         price_str = f"${listing.price:,}" if listing.price else "N/A"
-        mileage_str = f"{listing.mileage:,}" if listing.mileage else "N/A"
+        
+        # Build details string
+        details = []
+        if isinstance(listing, VehicleListing):
+            if listing.mileage:
+                details.append(f"{listing.mileage:,} mi")
+            if listing.transmission:
+                details.append(listing.transmission)
+            if listing.year:
+                details.append(str(listing.year))
+        else:
+            if listing.location:
+                details.append(listing.location)
+        
+        details_str = " | ".join(details) if details else "N/A"
         
         html += f"""
-            <tr>
-                <td class="{score_class}">{score_result.total_score:.1f}</td>
-                <td><a href="{listing.url}" target="_blank">{listing.title}</a></td>
-                <td>{price_str}</td>
-                <td>{mileage_str}</td>
-                <td>{listing.transmission or 'N/A'}</td>
-                <td><small>{'; '.join(score_result.reasons)}</small></td>
-            </tr>"""
+                <tr>
+                    <td>#{i}</td>
+                    <td class="score {score_class}">{listing.score:.1f}</td>
+                    <td><a href="{listing.url}" target="_blank">{listing.title}</a></td>
+                    <td class="price">{price_str}</td>
+                    <td class="details">{details_str}</td>
+                    <td class="reasons">{'; '.join(listing.score_reasons)}</td>
+                </tr>"""
     
     html += """
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+    </div>
 </body>
 </html>"""
     
     return html
 
 
-def save_html_file(html_content: str, filename: str) -> str:
-    if not filename:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"search_results_{timestamp}.html"
-    
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    
-    return filename
+# ============================================================================
+# MAIN ORCHESTRATION
+# ============================================================================
 
-
-def setup_logging():
-    """Setup basic logging."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('scraper_v2.log'),
-            logging.StreamHandler()
-        ]
-    )
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Craigslist Scraper v2')
+    parser.add_argument('--fetch', type=int, nargs='?', const=-1, default=None,
+                       help='Fetch N new listings (omit for unlimited)')
+    parser.add_argument('--clear', action='store_true', help='Clear storage first')
+    parser.add_argument('--output', type=str, default='', help='Output HTML filename')
+    parser.add_argument('--config', type=str, default='simple_config_v2.yaml', 
+                       help='Config file path')
+    return parser.parse_args()
 
 
 def main():
-    """Main entry point."""
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Craigslist Scraper v2 - Search for Subaru Foresters')
-    parser.add_argument('--max-fetch', type=int, default=10, help='Maximum number of individual listings to fetch and parse (default: 10)')
-    parser.add_argument('--output', type=str, default='', help='Output HTML filename (default: auto-generated timestamp)')
-    parser.add_argument('--query', type=str, default='subaru forester manual', help='Search query (default: "subaru forester manual")')
-    parser.add_argument('--city', type=str, default='sfbay', help='City to search (default: sfbay)')
-    parser.add_argument('--category', type=str, default='cto', help='Category code (default: cto for cars by owner)')
-    args = parser.parse_args()
+    """Main orchestration following the 7-step plan."""
+    args = parse_args()
     
-    setup_logging()
-    logger = logging.getLogger(__name__)
+    print("🚀 Starting Craigslist Scraper v2\n")
     
-    logger.info("🚀 Starting Craigslist Scraper v2 - Phase 1")
-    logger.info(f"Configuration: max_fetch={args.max_fetch}, query='{args.query}', city='{args.city}', category='{args.category}'")
+    # Step 1: Load config
+    config_path = Path(__file__).parent / args.config
+    config = load_config(config_path)
+    print(f"⚙️  Config loaded: {config.query}")
+    print(f"   Type: {config.listing_type}")
+    print(f"   Storage: {config.storage_filename}")
+    print(f"   Cities: {', '.join(config.cities)}\n")
     
-    try:
-        # Load v2 configuration
-        config_path = Path(__file__).parent / 'simple_config_v2.yaml'
-        with open(config_path, 'r') as f:
-            config_data = yaml.safe_load(f)
+    # Step 2: Load previous results
+    storage_path = Path(__file__).parent / config.storage_filename
+    storage = load_previous_results(storage_path, clear=args.clear)
+    
+    # Steps 3-5 (only if --fetch specified)
+    if args.fetch is not None:
+        rate_limiter = RateLimiter(5000)
         
-        # Get search configuration
-        search_config = config_data['searches']['subaru_forester']
+        # Step 3: Fetch search pages
+        search_listings = fetch_query_pages(config, rate_limiter)
         
-        # Initialize search engine with 5000ms delay
-        search_engine = CraigslistSearchEngine(delay_ms=5000)
+        # Step 4: Filter URLs
+        new_urls = filter_new_urls(search_listings, storage)
         
-        # Perform search with max_fetch limit
-        logger.info(f"🔎 Searching Craigslist for '{search_config['query']}' in {args.city}...")
-        listings = search_engine.search_city(
-            city=args.city,
-            category=args.category,
-            query=search_config['query'],
-            max_pages=10,  # Check up to 10 pages to find max_fetch listings
-            max_fetch=args.max_fetch
-        )
-        
-        logger.info(f"✅ Total listings fetched: {len(listings)}")
-        
-        if not listings:
-            logger.warning("❌ No listings found!")
-            return
-        
-        # Score listings
-        logger.info("📊 Scoring listings...")
-        scorer = SimpleScorer(search_config)
-        score_results = scorer.score_listings(listings)
-        
-        # Show top results in console
-        logger.info("🏆 RESULTS:")
-        scored_listings = sorted(zip(listings, score_results), 
-                                key=lambda x: x[1].total_score, reverse=True)
-        
-        for i, (listing, score_result) in enumerate(scored_listings):
-            price_str = f"${listing.price:,}" if listing.price else "N/A"
-            mileage_str = f"{listing.mileage:,}" if listing.mileage else "N/A"
-            
-            logger.info(f"{i+1:2d}. Score: {score_result.total_score:5.1f} | "
-                       f"Price: {price_str:>12} | "
-                       f"Mileage: {mileage_str:>10} | "
-                       f"Location: {listing.location:<15} | "
-                       f"Title: {listing.title}")
-            
-            for reason in score_result.reasons:
-                logger.info(f"     • {reason}")
-        
-        # Generate HTML report
-        logger.info("📄 Generating HTML report...")
-        html_content = generate_html(
-            listings=listings,
-            score_results=score_results,
-            query=search_config['query']
-        )
-        
-        # Save HTML file
-        html_filename = save_html_file(html_content, args.output)
-        logger.info(f"💾 HTML report saved to: {html_filename}")
-        
-        logger.info("🎉 Search completed successfully!")
-        
-    except Exception as e:
-        logger.error(f"❌ Error: {e}")
-        raise
+        # Step 5: Fetch listing details
+        limit = args.fetch if args.fetch > 0 else None
+        fetch_listings(new_urls, search_listings, config, rate_limiter, storage, limit=limit)
+    else:
+        print("📂 Display mode: showing existing listings\n")
+    
+    # Step 6: Rank listings
+    all_listings = storage.get_all_listings()
+    
+    if not all_listings:
+        print("❌ No listings found. Use --fetch to search.")
+        return
+    
+    print(f"📊 Ranking {len(all_listings)} listings...\n")
+    ranked_listings = rank_listings(all_listings, config.scoring_rules)
+    
+    # Step 7: Display
+    output_path = Path(args.output) if args.output else None
+    saved_path = display_listings(ranked_listings, config.query, output_path)
+    
+    # Summary
+    print(f"\n🏆 TOP 5:")
+    for i, listing in enumerate(ranked_listings[:5], 1):
+        price_str = f"${listing.price:,}" if listing.price else "N/A"
+        print(f"  {i}. Score: {listing.score:5.1f} | Price: {price_str:>10} | {listing.title[:50]}")
+    
+    print(f"\n🎉 Done! Results: {saved_path}")
 
 
 if __name__ == "__main__":

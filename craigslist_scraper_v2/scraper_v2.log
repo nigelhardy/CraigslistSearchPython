@@ -129,3 +129,175 @@
 2026-02-07 15:56:32,635 - INFO - 📄 Generating HTML report...
 2026-02-07 15:56:32,635 - INFO - 💾 HTML report saved to: search_results_20260207_155632.html
 2026-02-07 15:56:32,635 - INFO - 🎉 Search completed successfully!
+2026-02-07 16:02:00,341 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:02:00,343 - INFO - 🔎 Fetching new listings (limit: 5)...
+2026-02-07 16:02:30,949 - INFO - ✅ Found 5 new listings (checked 5 total)
+2026-02-07 16:02:30,949 - INFO - 📊 Processing 5 total listings...
+2026-02-07 16:02:30,949 - INFO - 📊 Scoring listings...
+2026-02-07 16:02:30,949 - INFO - 🏆 ALL LISTINGS (sorted by score):
+2026-02-07 16:02:30,949 - INFO -  1. Score:  30.0 | Price:       $6,900 | Mileage:        N/A | Location: sfbay           | Title: Subaru Forester w/ manual 5 Speed
+2026-02-07 16:02:30,949 - INFO -      • 'manual' (+25)
+2026-02-07 16:02:30,949 - INFO -      • 'awd' (+5)
+2026-02-07 16:02:30,950 - INFO -  2. Score:  10.0 | Price:       $7,200 | Mileage:        N/A | Location: sfbay           | Title: 2015 SUBARU FORESTER 2.5I PREMIUM
+2026-02-07 16:02:30,950 - INFO -      • 'low mileage' (+15)
+2026-02-07 16:02:30,950 - INFO -      • 'clean title' (+10)
+2026-02-07 16:02:30,950 - INFO -      • 'xt' (-15)
+2026-02-07 16:02:30,950 - INFO -  3. Score:   5.0 | Price:       $6,200 | Mileage:        N/A | Location: sfbay           | Title: 2011 Subaru Forester X 2.6 Liter, H4
+2026-02-07 16:02:30,950 - INFO -      • 'clean title' (+10)
+2026-02-07 16:02:30,950 - INFO -      • 'all wheel drive' (+5)
+2026-02-07 16:02:30,950 - INFO -      • 'automatic' (-10)
+2026-02-07 16:02:30,950 - INFO -  4. Score:  -5.0 | Price:      $19,480 | Mileage:        N/A | Location: sfbay           | Title: 2019 Subaru Forester Limited AWD.1Owmer.49km.Reliable
+2026-02-07 16:02:30,950 - INFO -      • 'awd' (+5)
+2026-02-07 16:02:30,950 - INFO -      • 'automatic' (-10)
+2026-02-07 16:02:30,950 - INFO -  5. Score: -20.0 | Price:       $3,000 | Mileage:        N/A | Location: sfbay           | Title: 2006 Subaru Forester AWD
+2026-02-07 16:02:30,950 - INFO -      • 'clean title' (+10)
+2026-02-07 16:02:30,950 - INFO -      • 'awd' (+5)
+2026-02-07 16:02:30,950 - INFO -      • 'xt' (-15)
+2026-02-07 16:02:30,950 - INFO -      • 'lot' (-20)
+2026-02-07 16:02:30,950 - INFO - 📄 Generating HTML report...
+2026-02-07 16:02:30,950 - INFO - 💾 HTML report saved to: search_results_20260207_160230.html
+2026-02-07 16:02:30,950 - INFO - 🎉 Done!
+2026-02-07 16:02:42,187 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:02:42,189 - INFO - 🔎 Fetching new listings (limit: 5)...
+2026-02-07 16:04:13,520 - INFO - ✅ Found 0 new listings (checked 15 total)
+2026-02-07 16:04:13,521 - INFO - 📊 Processing 5 total listings...
+2026-02-07 16:04:13,521 - INFO - 📊 Scoring listings...
+2026-02-07 16:04:13,521 - INFO - 🏆 ALL LISTINGS (sorted by score):
+2026-02-07 16:04:13,521 - INFO -  1. Score:  30.0 | Price:       $6,900 | Mileage:        N/A | Location: sfbay           | Title: Subaru Forester w/ manual 5 Speed
+2026-02-07 16:04:13,521 - INFO -      • 'manual' (+25)
+2026-02-07 16:04:13,521 - INFO -      • 'awd' (+5)
+2026-02-07 16:04:13,521 - INFO -  2. Score:  10.0 | Price:       $7,200 | Mileage:        N/A | Location: sfbay           | Title: 2015 SUBARU FORESTER 2.5I PREMIUM
+2026-02-07 16:04:13,521 - INFO -      • 'low mileage' (+15)
+2026-02-07 16:04:13,521 - INFO -      • 'clean title' (+10)
+2026-02-07 16:04:13,521 - INFO -      • 'xt' (-15)
+2026-02-07 16:04:13,521 - INFO -  3. Score:   5.0 | Price:       $6,200 | Mileage:        N/A | Location: sfbay           | Title: 2011 Subaru Forester X 2.6 Liter, H4
+2026-02-07 16:04:13,521 - INFO -      • 'clean title' (+10)
+2026-02-07 16:04:13,521 - INFO -      • 'all wheel drive' (+5)
+2026-02-07 16:04:13,521 - INFO -      • 'automatic' (-10)
+2026-02-07 16:04:13,521 - INFO -  4. Score:  -5.0 | Price:      $19,480 | Mileage:        N/A | Location: sfbay           | Title: 2019 Subaru Forester Limited AWD.1Owmer.49km.Reliable
+2026-02-07 16:04:13,521 - INFO -      • 'awd' (+5)
+2026-02-07 16:04:13,521 - INFO -      • 'automatic' (-10)
+2026-02-07 16:04:13,521 - INFO -  5. Score: -20.0 | Price:       $3,000 | Mileage:        N/A | Location: sfbay           | Title: 2006 Subaru Forester AWD
+2026-02-07 16:04:13,521 - INFO -      • 'clean title' (+10)
+2026-02-07 16:04:13,521 - INFO -      • 'awd' (+5)
+2026-02-07 16:04:13,521 - INFO -      • 'xt' (-15)
+2026-02-07 16:04:13,521 - INFO -      • 'lot' (-20)
+2026-02-07 16:04:13,521 - INFO - 📄 Generating HTML report...
+2026-02-07 16:04:13,522 - INFO - 💾 HTML report saved to: search_results_20260207_160413.html
+2026-02-07 16:04:13,522 - INFO - 🎉 Done!
+2026-02-07 16:04:25,281 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:04:25,284 - INFO - 📂 Display mode: Loading existing listings (use --fetch to get new ones)
+2026-02-07 16:04:25,284 - INFO - 📊 Processing 5 total listings...
+2026-02-07 16:04:25,284 - INFO - 📊 Scoring listings...
+2026-02-07 16:04:25,284 - INFO - 🏆 ALL LISTINGS (sorted by score):
+2026-02-07 16:04:25,284 - INFO -  1. Score:  30.0 | Price:       $6,900 | Mileage:        N/A | Location: sfbay           | Title: Subaru Forester w/ manual 5 Speed
+2026-02-07 16:04:25,284 - INFO -      • 'manual' (+25)
+2026-02-07 16:04:25,284 - INFO -      • 'awd' (+5)
+2026-02-07 16:04:25,284 - INFO -  2. Score:  10.0 | Price:       $7,200 | Mileage:        N/A | Location: sfbay           | Title: 2015 SUBARU FORESTER 2.5I PREMIUM
+2026-02-07 16:04:25,284 - INFO -      • 'low mileage' (+15)
+2026-02-07 16:04:25,284 - INFO -      • 'clean title' (+10)
+2026-02-07 16:04:25,284 - INFO -      • 'xt' (-15)
+2026-02-07 16:04:25,284 - INFO -  3. Score:   5.0 | Price:       $6,200 | Mileage:        N/A | Location: sfbay           | Title: 2011 Subaru Forester X 2.6 Liter, H4
+2026-02-07 16:04:25,284 - INFO -      • 'clean title' (+10)
+2026-02-07 16:04:25,284 - INFO -      • 'all wheel drive' (+5)
+2026-02-07 16:04:25,284 - INFO -      • 'automatic' (-10)
+2026-02-07 16:04:25,284 - INFO -  4. Score:  -5.0 | Price:      $19,480 | Mileage:        N/A | Location: sfbay           | Title: 2019 Subaru Forester Limited AWD.1Owmer.49km.Reliable
+2026-02-07 16:04:25,284 - INFO -      • 'awd' (+5)
+2026-02-07 16:04:25,284 - INFO -      • 'automatic' (-10)
+2026-02-07 16:04:25,284 - INFO -  5. Score: -20.0 | Price:       $3,000 | Mileage:        N/A | Location: sfbay           | Title: 2006 Subaru Forester AWD
+2026-02-07 16:04:25,284 - INFO -      • 'clean title' (+10)
+2026-02-07 16:04:25,284 - INFO -      • 'awd' (+5)
+2026-02-07 16:04:25,284 - INFO -      • 'xt' (-15)
+2026-02-07 16:04:25,285 - INFO -      • 'lot' (-20)
+2026-02-07 16:04:25,285 - INFO - 📄 Generating HTML report...
+2026-02-07 16:04:25,285 - INFO - 💾 HTML report saved to: search_results_20260207_160425.html
+2026-02-07 16:04:25,285 - INFO - 🎉 Done!
+2026-02-07 16:06:39,048 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:06:39,050 - INFO - 📂 Display mode: Loading existing listings (use --fetch to get new ones)
+2026-02-07 16:06:39,050 - INFO - 📊 Processing 5 total listings...
+2026-02-07 16:06:39,050 - INFO - 📊 Scoring listings...
+2026-02-07 16:06:39,050 - INFO - 🏆 ALL LISTINGS (sorted by score):
+2026-02-07 16:06:39,050 - INFO -  1. Score:  30.0 | Price:       $6,900 | Mileage:        N/A | Location: sfbay           | Title: Subaru Forester w/ manual 5 Speed
+2026-02-07 16:06:39,050 - INFO -      • 'manual' (+25)
+2026-02-07 16:06:39,050 - INFO -      • 'awd' (+5)
+2026-02-07 16:06:39,050 - INFO -  2. Score:  10.0 | Price:       $7,200 | Mileage:        N/A | Location: sfbay           | Title: 2015 SUBARU FORESTER 2.5I PREMIUM
+2026-02-07 16:06:39,050 - INFO -      • 'low mileage' (+15)
+2026-02-07 16:06:39,050 - INFO -      • 'clean title' (+10)
+2026-02-07 16:06:39,050 - INFO -      • 'xt' (-15)
+2026-02-07 16:06:39,050 - INFO -  3. Score:   5.0 | Price:       $6,200 | Mileage:        N/A | Location: sfbay           | Title: 2011 Subaru Forester X 2.6 Liter, H4
+2026-02-07 16:06:39,051 - INFO -      • 'clean title' (+10)
+2026-02-07 16:06:39,051 - INFO -      • 'all wheel drive' (+5)
+2026-02-07 16:06:39,051 - INFO -      • 'automatic' (-10)
+2026-02-07 16:06:39,051 - INFO -  4. Score:  -5.0 | Price:      $19,480 | Mileage:        N/A | Location: sfbay           | Title: 2019 Subaru Forester Limited AWD.1Owmer.49km.Reliable
+2026-02-07 16:06:39,051 - INFO -      • 'awd' (+5)
+2026-02-07 16:06:39,051 - INFO -      • 'automatic' (-10)
+2026-02-07 16:06:39,051 - INFO -  5. Score: -20.0 | Price:       $3,000 | Mileage:        N/A | Location: sfbay           | Title: 2006 Subaru Forester AWD
+2026-02-07 16:06:39,051 - INFO -      • 'clean title' (+10)
+2026-02-07 16:06:39,051 - INFO -      • 'awd' (+5)
+2026-02-07 16:06:39,051 - INFO -      • 'xt' (-15)
+2026-02-07 16:06:39,051 - INFO -      • 'lot' (-20)
+2026-02-07 16:06:39,051 - INFO - 📄 Generating HTML report...
+2026-02-07 16:06:39,051 - INFO - 💾 HTML report saved to: search_results_20260207_160639.html
+2026-02-07 16:06:39,051 - INFO - 🎉 Done!
+2026-02-07 16:06:50,789 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:06:50,792 - INFO - 🔎 Fetching new listings (limit: 5)...
+2026-02-07 16:08:22,539 - INFO - ✅ Found 0 new listings (checked 15 total)
+2026-02-07 16:08:22,540 - INFO - 📊 Processing 5 total listings...
+2026-02-07 16:08:22,540 - INFO - 📊 Scoring listings...
+2026-02-07 16:08:22,540 - INFO - 🏆 ALL LISTINGS (sorted by score):
+2026-02-07 16:08:22,540 - INFO -  1. Score:  30.0 | Price:       $6,900 | Mileage:        N/A | Location: sfbay           | Title: Subaru Forester w/ manual 5 Speed
+2026-02-07 16:08:22,540 - INFO -      • 'manual' (+25)
+2026-02-07 16:08:22,540 - INFO -      • 'awd' (+5)
+2026-02-07 16:08:22,540 - INFO -  2. Score:  10.0 | Price:       $7,200 | Mileage:        N/A | Location: sfbay           | Title: 2015 SUBARU FORESTER 2.5I PREMIUM
+2026-02-07 16:08:22,541 - INFO -      • 'low mileage' (+15)
+2026-02-07 16:08:22,541 - INFO -      • 'clean title' (+10)
+2026-02-07 16:08:22,541 - INFO -      • 'xt' (-15)
+2026-02-07 16:08:22,541 - INFO -  3. Score:   5.0 | Price:       $6,200 | Mileage:        N/A | Location: sfbay           | Title: 2011 Subaru Forester X 2.6 Liter, H4
+2026-02-07 16:08:22,541 - INFO -      • 'clean title' (+10)
+2026-02-07 16:08:22,541 - INFO -      • 'all wheel drive' (+5)
+2026-02-07 16:08:22,541 - INFO -      • 'automatic' (-10)
+2026-02-07 16:08:22,541 - INFO -  4. Score:  -5.0 | Price:      $19,480 | Mileage:        N/A | Location: sfbay           | Title: 2019 Subaru Forester Limited AWD.1Owmer.49km.Reliable
+2026-02-07 16:08:22,541 - INFO -      • 'awd' (+5)
+2026-02-07 16:08:22,541 - INFO -      • 'automatic' (-10)
+2026-02-07 16:08:22,541 - INFO -  5. Score: -20.0 | Price:       $3,000 | Mileage:        N/A | Location: sfbay           | Title: 2006 Subaru Forester AWD
+2026-02-07 16:08:22,541 - INFO -      • 'clean title' (+10)
+2026-02-07 16:08:22,541 - INFO -      • 'awd' (+5)
+2026-02-07 16:08:22,541 - INFO -      • 'xt' (-15)
+2026-02-07 16:08:22,541 - INFO -      • 'lot' (-20)
+2026-02-07 16:08:22,541 - INFO - 📄 Generating HTML report...
+2026-02-07 16:08:22,541 - INFO - 💾 HTML report saved to: search_results_20260207_160822.html
+2026-02-07 16:08:22,541 - INFO - 🎉 Done!
+2026-02-07 16:09:19,998 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:09:20,000 - INFO - 🔎 Fetching new listings (limit: 5)...
+2026-02-07 16:09:50,532 - INFO - ✅ Found 5 new listings (checked 5 total)
+2026-02-07 16:09:50,533 - INFO - 📊 Processing 5 total listings...
+2026-02-07 16:09:50,533 - INFO - 📊 Scoring listings...
+2026-02-07 16:09:50,533 - INFO - 🏆 ALL LISTINGS (sorted by score):
+2026-02-07 16:09:50,533 - INFO -  1. Score:  30.0 | Price:       $6,900 | Mileage:        N/A | Location: sfbay           | Title: Subaru Forester w/ manual 5 Speed
+2026-02-07 16:09:50,533 - INFO -      • 'manual' (+25)
+2026-02-07 16:09:50,533 - INFO -      • 'awd' (+5)
+2026-02-07 16:09:50,533 - INFO -  2. Score:  10.0 | Price:       $7,200 | Mileage:        N/A | Location: sfbay           | Title: 2015 SUBARU FORESTER 2.5I PREMIUM
+2026-02-07 16:09:50,533 - INFO -      • 'low mileage' (+15)
+2026-02-07 16:09:50,533 - INFO -      • 'clean title' (+10)
+2026-02-07 16:09:50,533 - INFO -      • 'xt' (-15)
+2026-02-07 16:09:50,533 - INFO -  3. Score:   5.0 | Price:       $6,200 | Mileage:        N/A | Location: sfbay           | Title: 2011 Subaru Forester X 2.6 Liter, H4
+2026-02-07 16:09:50,533 - INFO -      • 'clean title' (+10)
+2026-02-07 16:09:50,533 - INFO -      • 'all wheel drive' (+5)
+2026-02-07 16:09:50,533 - INFO -      • 'automatic' (-10)
+2026-02-07 16:09:50,533 - INFO -  4. Score:  -5.0 | Price:      $19,480 | Mileage:        N/A | Location: sfbay           | Title: 2019 Subaru Forester Limited AWD.1Owmer.49km.Reliable
+2026-02-07 16:09:50,533 - INFO -      • 'awd' (+5)
+2026-02-07 16:09:50,534 - INFO -      • 'automatic' (-10)
+2026-02-07 16:09:50,534 - INFO -  5. Score: -20.0 | Price:       $3,000 | Mileage:        N/A | Location: sfbay           | Title: 2006 Subaru Forester AWD
+2026-02-07 16:09:50,534 - INFO -      • 'clean title' (+10)
+2026-02-07 16:09:50,534 - INFO -      • 'awd' (+5)
+2026-02-07 16:09:50,534 - INFO -      • 'xt' (-15)
+2026-02-07 16:09:50,534 - INFO -      • 'lot' (-20)
+2026-02-07 16:09:50,534 - INFO - 📄 Generating HTML report...
+2026-02-07 16:09:50,534 - INFO - 💾 HTML report saved to: search_results_20260207_160950.html
+2026-02-07 16:09:50,534 - INFO - 🎉 Done!
+2026-02-07 16:10:41,565 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:10:41,568 - INFO - 🔎 Fetching new listings (limit: 5)...
+2026-02-07 16:10:41,568 - INFO -   Searching page 1 (need 5 more new listings)...
+2026-02-07 16:15:16,737 - INFO - 🚀 Starting Craigslist Scraper v2 - Phase 1
+2026-02-07 16:15:16,739 - INFO - 📂 Display mode: Loading existing listings (use --fetch to get new ones)
+2026-02-07 16:15:16,739 - WARNING - ❌ No listings found! Use --fetch to search for listings.

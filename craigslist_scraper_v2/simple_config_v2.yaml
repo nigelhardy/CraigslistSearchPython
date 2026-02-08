@@ -4,11 +4,12 @@ searches:
     categories: ["cto"]
     cities: ["sfbay"]
     max_pages: 3
+    listing_type: "vehicle"  # Specifies this is a vehicle search
+    
+    storage:
+      filename: "subaru_forester_listings.json"
     
     scoring:
-      # Each rule has keywords (list) and points (can be positive or negative)
-      # Case insensitive matching in title + description
-      
       - keywords: ["manual", "5-speed", "5 speed", "6-speed", "6 speed", "standard transmission"]
         points: 25
       
