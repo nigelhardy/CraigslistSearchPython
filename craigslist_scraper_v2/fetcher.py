@@ -30,13 +30,49 @@ class Fetcher(Protocol):
 class CraigslistFetcher:
     """Fetches listings from live Craigslist website via HTTP."""
     
-    def __init__(self, config: FetcherConfig):
+    def __init__(self, config: FetcherConfig, raw_data_dir: Optional[Path] = None):
         self.config = config
+        self.raw_data_dir = raw_data_dir
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
         self._last_request_time = 0.0
+    
+    def _url_to_filename(self, url: str) -> str:
+        """Extract filename from URL or generate hash-based filename."""
+        import hashlib
+        
+        # Try to extract actual filename from URL
+        if '.html' in url:
+            parts = url.split('/')
+            for part in reversed(parts):
+                if part.endswith('.html'):
+                    return part
+        
+        # Fallback to hash of URL
+        return hashlib.md5(url.encode()).hexdigest() + '.html'
+    
+    def _save_raw_html(self, url: str, html_content: str) -> None:
+        """Save raw HTML content to file if raw_data_dir is configured."""
+        if not self.raw_data_dir:
+            return
+        
+        try:
+            # Ensure directory exists
+            self.raw_data_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Generate filename and save
+            filename = self._url_to_filename(url)
+            filepath = self.raw_data_dir / filename
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+                
+            print(f"💾 Saved raw HTML: {filename}")
+            
+        except Exception as e:
+            print(f"⚠️  Failed to save raw HTML for {url}: {e}")
     
     def _rate_limit(self) -> None:
         current_time = time.time() * 1000
@@ -58,13 +94,18 @@ class CraigslistFetcher:
                 response = self.session.get(url, timeout=30)
                 response.raise_for_status()
                 
-                soup = BeautifulSoup(response.content, 'html.parser')
+                # Save raw HTML before parsing
+                self._save_raw_html(url, response.text)
+                
+                soup = BeautifulSoup(response.text, 'html.parser')
                 
                 if 'loading' in soup.get_text().lower():
                     time.sleep(3)
                     self._rate_limit()
                     response = self.session.get(url, timeout=30)
-                    soup = BeautifulSoup(response.content, 'html.parser')
+                    # Save raw HTML for retry as well
+                    self._save_raw_html(url, response.text)
+                    soup = BeautifulSoup(response.text, 'html.parser')
                 
                 return soup
                 
@@ -160,13 +201,14 @@ class FileFetcher:
         return list(self._url_to_file_map.keys())
 
 
-def create_fetcher(config: FetcherConfig, mode: str = "live", data_dir: Optional[Path] = None) -> Fetcher:
+def create_fetcher(config: FetcherConfig, mode: str = "live", data_dir: Optional[Path] = None, raw_data_dir: Optional[Path] = None) -> Fetcher:
     """Factory function to create the appropriate fetcher.
     
     Args:
         config: Fetcher configuration (delays, retries, etc.)
         mode: "live" for HTTP fetching from Craigslist, "test" for file-based fetching
         data_dir: Required for test mode, directory containing saved HTML files
+        raw_data_dir: Optional directory to save raw HTML files for debugging
         
     Returns:
         Fetcher instance (CraigslistFetcher or FileFetcher)
@@ -176,7 +218,7 @@ def create_fetcher(config: FetcherConfig, mode: str = "live", data_dir: Optional
             raise ValueError("data_dir required for test mode")
         return FileFetcher(data_dir)
     else:
-        return CraigslistFetcher(config)
+        return CraigslistFetcher(config, raw_data_dir)
 
 
 def fetch_listings(

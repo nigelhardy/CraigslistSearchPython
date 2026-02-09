@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument('--output', type=str, default='', help='Output HTML filename')
     parser.add_argument('--config', type=str, default='simple_config_v2.yaml',
                        help='Config file path')
+    parser.add_argument('--save-raw', action='store_true', help='Save raw HTML files for debugging')
     return parser.parse_args()
 
 
@@ -54,7 +55,15 @@ def main():
     
     # Create fetcher (always live mode for main.py)
     fetcher_config = FetcherConfig(delay_ms=5000, max_retries=3)
-    fetcher = create_fetcher(fetcher_config, mode="live")
+    
+    # Set up raw data directory if --save-raw flag is used
+    raw_data_dir = None
+    if args.save_raw:
+        config_name = Path(args.config).stem  # Get filename without extension
+        raw_data_dir = Path(__file__).parent / "raw_data" / config_name
+        print(f"💾 Raw HTML will be saved to: {raw_data_dir}\n")
+    
+    fetcher = create_fetcher(fetcher_config, mode="live", raw_data_dir=raw_data_dir)
     
     # Steps 3-5 (only if --fetch specified)
     if args.fetch is not None:

@@ -1,8 +1,8 @@
 searches:
   subaru_forester:
     query: "subaru forester"
-    categories: ["cto"]
-    cities: ["sfbay"]
+    categories: ["cta", "pta"]
+    cities: ["sfbay", "losangeles"]
     max_pages: 3
     listing_type: "vehicle"  # Specifies this is a vehicle search
     
@@ -22,7 +22,7 @@ searches:
       - keywords: ["clean title", "title in hand"]
         points: 10
       
-      - keywords: ["rust free", "no rust", "garage kept"]
+      - keywords: ["rust free", "no rust", "garage kept", "one owner", "1-owner", "1 owner"]
         points: 8
       
       - keywords: ["awd", "all wheel drive", "4x4", "4wd"]
@@ -31,7 +31,7 @@ searches:
       - keywords: ["automatic", "auto", "cvt", "cvt transmission"]
         points: -10
       
-      - keywords: ["turbo", "xt", "2.5t", "wrx engine swap"]
+      - keywords: ["2.5t", "wrx engine swap"]
         points: -15
       
       - keywords: ["salvage", "salvage title", "rebuilt title", "flood damage"]

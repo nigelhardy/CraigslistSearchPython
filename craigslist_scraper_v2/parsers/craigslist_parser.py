@@ -28,58 +28,125 @@ class CraigslistListingParser(ListingParser):
     def parse(self, soup: BeautifulSoup, base_listing: Listing) -> Optional[Listing]:
         """Parse Craigslist HTML into a Listing or VehicleListing."""
         try:
-            # Extract basic fields from HTML
-            title = self._extract_title(soup) or base_listing.title
-            price = self._extract_price(soup) or base_listing.price
-            location = self._extract_location(soup) or base_listing.location
-            description = self._extract_description(soup)
-            images = self._extract_images(soup)
-            posted_date = self._extract_posted_date(soup)
+            # First try to extract from JSON-LD (new Craigslist format)
+            json_ld_data = self._extract_json_ld_data(soup)
             
-            # Extract vehicle attributes
-            vehicle_attrs = self._extract_vehicle_attributes(soup)
-            
-            # Determine if this is a vehicle listing
-            is_vehicle = self._is_vehicle_listing(base_listing, vehicle_attrs)
-            
-            # Extract year from title if not found in attributes
-            year = vehicle_attrs.get('year') or self._extract_year_from_title(title)
-            
-            # Create appropriate listing type
-            if is_vehicle:
-                listing = VehicleListing(
-                    url=base_listing.url,
-                    title=title,
-                    price=price,
-                    location=location,
-                    city=base_listing.city,
-                    category=base_listing.category,
-                    state=ListingState.HTML_PARSED,
-                    description=description,
-                    posted_date=posted_date,
-                    images=images,
-                    mileage=vehicle_attrs.get('mileage'),
-                    transmission=vehicle_attrs.get('transmission'),
-                    title_status=vehicle_attrs.get('title_status'),
-                    year=year,
-                    vin=vehicle_attrs.get('vin'),
-                    condition=vehicle_attrs.get('condition'),
-                    make=vehicle_attrs.get('make'),
-                    model=vehicle_attrs.get('model')
-                )
+            if json_ld_data:
+                # Use JSON-LD data as primary source
+                title = json_ld_data.get('name') or base_listing.title
+                price = self._parse_int(json_ld_data.get('offers', {}).get('price', ''))
+                description = json_ld_data.get('description')
+                images = json_ld_data.get('image', [])
+                
+                # Extract location from JSON-LD
+                location = None
+                address = json_ld_data.get('offers', {}).get('availableAtOrFrom', {}).get('address', {})
+                if address:
+                    city = address.get('addressLocality')
+                    region = address.get('addressRegion')
+                    if city and region:
+                        location = f"{city}, {region}"
+                    elif city:
+                        location = city
+                
+                # For vehicle listings, we still need to extract from HTML attributes
+                # since JSON-LD doesn't contain vehicle-specific details
+                vehicle_attrs = self._extract_vehicle_attributes(soup)
+                
+                # Determine if this is a vehicle listing
+                is_vehicle = self._is_vehicle_listing(base_listing, vehicle_attrs)
+                
+                # Extract year from title if not found in attributes
+                year = vehicle_attrs.get('year') or self._extract_year_from_title(title)
+                
+                # Create appropriate listing type
+                if is_vehicle:
+                    listing = VehicleListing(
+                        url=base_listing.url,
+                        title=title,
+                        price=price,
+                        location=location or base_listing.location,
+                        city=base_listing.city,
+                        category=base_listing.category,
+                        state=ListingState.HTML_PARSED,
+                        description=description,
+                        posted_date=self._extract_posted_date(soup),  # Still extract from HTML
+                        images=images,
+                        mileage=vehicle_attrs.get('mileage'),
+                        transmission=vehicle_attrs.get('transmission'),
+                        title_status=vehicle_attrs.get('title_status'),
+                        year=year,
+                        vin=vehicle_attrs.get('vin'),
+                        condition=vehicle_attrs.get('condition'),
+                        make=vehicle_attrs.get('make'),
+                        model=vehicle_attrs.get('model')
+                    )
+                else:
+                    listing = Listing(
+                        url=base_listing.url,
+                        title=title,
+                        price=price,
+                        location=location or base_listing.location,
+                        city=base_listing.city,
+                        category=base_listing.category,
+                        state=ListingState.HTML_PARSED,
+                        description=description,
+                        posted_date=self._extract_posted_date(soup),  # Still extract from HTML
+                        images=images
+                    )
             else:
-                listing = Listing(
-                    url=base_listing.url,
-                    title=title,
-                    price=price,
-                    location=location,
-                    city=base_listing.city,
-                    category=base_listing.category,
-                    state=ListingState.HTML_PARSED,
-                    description=description,
-                    posted_date=posted_date,
-                    images=images
-                )
+                # Fallback to old HTML parsing method
+                title = self._extract_title(soup) or base_listing.title
+                price = self._extract_price(soup) or base_listing.price
+                location = self._extract_location(soup) or base_listing.location
+                description = self._extract_description(soup)
+                images = self._extract_images(soup)
+                posted_date = self._extract_posted_date(soup)
+                
+                # Extract vehicle attributes
+                vehicle_attrs = self._extract_vehicle_attributes(soup)
+                
+                # Determine if this is a vehicle listing
+                is_vehicle = self._is_vehicle_listing(base_listing, vehicle_attrs)
+                
+                # Extract year from title if not found in attributes
+                year = vehicle_attrs.get('year') or self._extract_year_from_title(title)
+                
+                # Create appropriate listing type
+                if is_vehicle:
+                    listing = VehicleListing(
+                        url=base_listing.url,
+                        title=title,
+                        price=price,
+                        location=location,
+                        city=base_listing.city,
+                        category=base_listing.category,
+                        state=ListingState.HTML_PARSED,
+                        description=description,
+                        posted_date=posted_date,
+                        images=images,
+                        mileage=vehicle_attrs.get('mileage'),
+                        transmission=vehicle_attrs.get('transmission'),
+                        title_status=vehicle_attrs.get('title_status'),
+                        year=year,
+                        vin=vehicle_attrs.get('vin'),
+                        condition=vehicle_attrs.get('condition'),
+                        make=vehicle_attrs.get('make'),
+                        model=vehicle_attrs.get('model')
+                    )
+                else:
+                    listing = Listing(
+                        url=base_listing.url,
+                        title=title,
+                        price=price,
+                        location=location,
+                        city=base_listing.city,
+                        category=base_listing.category,
+                        state=ListingState.HTML_PARSED,
+                        description=description,
+                        posted_date=posted_date,
+                        images=images
+                    )
             
             # Set timestamps
             listing.last_updated = datetime.now().isoformat()
@@ -415,10 +482,27 @@ class CraigslistListingParser(ListingParser):
         
         return False
     
+    def _extract_json_ld_data(self, soup: BeautifulSoup) -> Optional[dict]:
+        """Extract structured data from JSON-LD script tags."""
+        # Look for the main posting data
+        script = soup.find('script', {'id': 'ld_posting_data', 'type': 'application/ld+json'})
+        if script:
+            try:
+                import json
+                data = json.loads(script.string)
+                return data
+            except Exception as e:
+                print(f"⚠️  Error parsing JSON-LD data: {e}")
+                pass
+        
+        return None
+    
     def _parse_int(self, value: str) -> Optional[int]:
         """Safely parse an integer from a string, removing commas."""
         try:
-            cleaned = value.replace(',', '').replace('$', '').strip()
-            return int(cleaned)
+            if isinstance(value, (int, float)):
+                return int(value)
+            cleaned = str(value).replace(',', '').replace('$', '').strip()
+            return int(cleaned) if cleaned else None
         except (ValueError, AttributeError):
             return None
