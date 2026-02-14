@@ -71,34 +71,57 @@ def main():
         
         # Step 3: Fetch search pages
         engine = SearchEngine(fetcher)
-        search_listings = engine.fetch_search_pages(config)
+        search_results = engine.fetch_search_pages(config)
         
-        # Step 4: Filter URLs
-        new_urls = [l.url for l in search_listings if not storage.is_seen(l.url)]
-        print(f"🔍 Filtered {len(new_urls)} new URLs from {len(search_listings)} total")
+        # Step 4: Filter URLs - process X per city/category combination
+        urls_to_process = []
+        
+        if args.fetch is not None and args.fetch > 0:
+            # Distribute fetch limit evenly across combinations
+            per_combo_limit = max(1, args.fetch // max(1, search_results.get_combo_count()))
+            print(f"📋 Fetching up to {per_combo_limit} listings per city/category combination")
+            
+            for (city, category) in search_results.listings_by_combo.keys():
+                combo_listings = search_results.get_listings(city, category)
+                combo_new_urls = [l.url for l in combo_listings if not storage.is_seen(l.url)]
+                
+                # Take up to per_combo_limit URLs from this combo
+                combo_urls_to_process = combo_new_urls[:per_combo_limit]
+                urls_to_process.extend(combo_urls_to_process)
+                
+                print(f"🔍 {city}/{category}: {len(combo_urls_to_process)} new URLs selected from {len(combo_new_urls)} available")
+        else:
+            # Unlimited - get all new URLs
+            all_new_urls = [l.url for l in search_results.get_all_listings() if not storage.is_seen(l.url)]
+            urls_to_process = all_new_urls
+            print(f"🔍 Unlimited mode: {len(urls_to_process)} new URLs from {search_results.get_total_count()} total listings")
         
         # Step 5: Fetch listing details
-        if new_urls:
-            limit = args.fetch if args.fetch > 0 else None
-            if limit:
-                new_urls = new_urls[:limit]
-                print(f"📋 Fetching {len(new_urls)} listings (limited)")
+        if urls_to_process:
+            print(f"📋 Fetching details for {len(urls_to_process)} listings")
             
             from fetcher import fetch_listings as fetch_listing_details
             parser = CraigslistListingParser()
-            fetch_listing_details(new_urls, search_listings, config, fetcher, storage, parser)
+            fetch_listing_details(urls_to_process, search_results.get_all_listings(), config, fetcher, storage, parser)
     else:
         print("📂 Display mode: showing existing listings\n")
     
-    # Step 6: Rank listings
-    all_listings = storage.get_all_listings()
+    # Step 6: Rank listings (only fully processed ones)
+    processed_listings = storage.get_processed_listings()
+    all_listings = storage.get_all_listings()  # For stats only
     
-    if not all_listings:
-        print("❌ No listings found. Use --fetch to search.")
+    if not processed_listings:
+        url_count = len(all_listings)
+        print(f"❌ No processed listings found. Found {url_count} unprocessed URLs.")
+        print("💡 Use --fetch to download and process listing details.")
         return
     
-    print(f"📊 Ranking {len(all_listings)} listings...\n")
-    ranked_listings = rank_listings(all_listings, config.scoring_rules)
+    unprocessed_listings = storage.get_unprocessed_listings()
+    print(f"📊 Processing {len(processed_listings)} of {len(all_listings)} total listings:")
+    print(f"   ✅ Processed: {len(processed_listings)}")
+    print(f"   ⏳ Unprocessed: {len(unprocessed_listings)}")
+    print(f"   📊 Total: {len(all_listings)}\n")
+    ranked_listings = rank_listings(processed_listings, config.scoring_rules)
     
     # Step 7: Display
     output_path = Path(args.output) if args.output else None

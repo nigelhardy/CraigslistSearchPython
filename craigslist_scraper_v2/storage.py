@@ -1,31 +1,10 @@
-"""Storage module for listing persistence."""
+"""Storage module for persistent listing data management."""
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Set, Type, Any
+from typing import List, Dict, Any, Set
 
-from models import Listing, VehicleListing, ListingState
-
-
-LISTING_TYPE_MAP: Dict[str, Type[Listing]] = {
-    "base": Listing,
-    "vehicle": VehicleListing,
-}
-
-
-def create_listing_from_dict(data: Dict[str, Any]) -> Listing:
-    """Factory function to create correct listing type from dictionary."""
-    listing_type = data.get('listing_type', 'base')
-    listing_class = LISTING_TYPE_MAP.get(listing_type, Listing)
-    
-    state_name = data.get('state', 'URL_ONLY')
-    if isinstance(state_name, str):
-        data['state'] = ListingState[state_name]
-    
-    valid_fields = set(listing_class.__dataclass_fields__.keys())
-    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-    
-    return listing_class(**filtered_data)
+from models import Listing
 
 
 class ListingStorage:
@@ -47,10 +26,24 @@ class ListingStorage:
                 data = json.load(f)
             
             for listing_data in data.get('listings', []):
-                listing = create_listing_from_dict(listing_data)
-                self._listings[listing.url] = listing
+                listing = Listing.from_dict(listing_data)
+                
+                # Only load listings that have actual data (HTML_PARSED state)
+                from models import ListingState
+                if listing.state == ListingState.HTML_PARSED:
+                    self._listings[listing.url] = listing
+                else:
+                    # Skip unprocessed listings
+                    skipped_count = getattr(self, '_skipped_count', 0) + 1
+                    self._skipped_count = skipped_count
             
-            print(f"📂 Loaded {len(self._listings)} listings from storage")
+            loaded_count = len(self._listings)
+            skipped_count = getattr(self, '_skipped_count', 0)
+            
+            if skipped_count > 0:
+                print(f"📂 Loaded {loaded_count} processed listings from storage (skipped {skipped_count} unprocessed)")
+            else:
+                print(f"📂 Loaded {loaded_count} listings from storage")
         except Exception as e:
             print(f"⚠️  Error loading storage: {e}")
             self._listings = {}
@@ -60,8 +53,7 @@ class ListingStorage:
         try:
             data = {
                 'listings': [listing.to_dict() for listing in self._listings.values()],
-                'last_updated': datetime.now().isoformat(),
-                'total_count': len(self._listings)
+                'updated_at': datetime.now().isoformat()
             }
             
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,6 +71,13 @@ class ListingStorage:
         return set(self._listings.keys())
     
     def add_listing(self, listing: Listing) -> bool:
+        """Add a listing to storage if not already present and is fully processed."""
+        from models import ListingState
+        
+        # Only save listings that have actual data
+        if listing.state != ListingState.HTML_PARSED:
+            return False
+        
         if listing.url in self._listings:
             return False
         
@@ -91,6 +90,18 @@ class ListingStorage:
     
     def get_all_listings(self) -> List[Listing]:
         return list(self._listings.values())
+    
+    def get_processed_listings(self) -> List[Listing]:
+        """Get only listings that have been fully processed (HTML_PARSED state)."""
+        from models import ListingState
+        return [listing for listing in self._listings.values() 
+                if listing.state == ListingState.HTML_PARSED]
+    
+    def get_unprocessed_listings(self) -> List[Listing]:
+        """Get only listings that haven't been processed (URL_ONLY state)."""
+        from models import ListingState
+        return [listing for listing in self._listings.values() 
+                if listing.state == ListingState.URL_ONLY]
     
     def clear(self) -> None:
         self._listings = {}

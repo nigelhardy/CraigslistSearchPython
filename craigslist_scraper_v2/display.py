@@ -28,6 +28,7 @@ def generate_html(listings: List[Listing], query: str) -> str:
         .price {{ color: #4CAF50; font-weight: bold; }}
         .reasons {{ font-size: 0.9em; color: #666; }}
         .details {{ font-size: 0.85em; color: #888; }}
+        .region {{ font-size: 0.85em; color: #2196F3; font-weight: 500; }}
     </style>
 </head>
 <body>
@@ -42,6 +43,7 @@ def generate_html(listings: List[Listing], query: str) -> str:
                 <tr>
                     <th>Rank</th>
                     <th>Score</th>
+                    <th>Region</th>
                     <th>Title</th>
                     <th>Price</th>
                     <th>Details</th>
@@ -74,10 +76,16 @@ def generate_html(listings: List[Listing], query: str) -> str:
         
         details_str = " | ".join(details) if details else "N/A"
         
+        # Add region information
+        region = listing.city if listing.city else "Unknown"
+        if listing.category:
+            region += f" ({listing.category})"
+        
         html += f"""
                 <tr>
                     <td>#{i}</td>
                     <td class="score {score_class}">{listing.score:.1f}</td>
+                    <td class="region">{region}</td>
                     <td><a href="{listing.url}" target="_blank">{listing.title}</a></td>
                     <td class="price">{price_str}</td>
                     <td class="details">{details_str}</td>

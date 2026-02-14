@@ -49,5 +49,13 @@ def load_config(config_path: Path) -> SearchConfig:
     with open(config_path, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
     
-    search_data = data['searches']['subaru_forester']
+    # Get the first search configuration (supports multiple search types)
+    searches = data['searches']
+    if not searches:
+        raise ValueError("No searches found in config")
+    
+    # Get the first search key (e.g., 'subaru_forester', 'subaru_forester_parts')
+    search_name = next(iter(searches))
+    search_data = searches[search_name]
+    
     return SearchConfig.from_dict(search_data)

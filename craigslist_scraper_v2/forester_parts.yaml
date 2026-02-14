@@ -1,0 +1,76 @@
+searches:
+  subaru_forester_parts:
+    query: "subaru forester"
+    categories: ["pta", "wta"]  # Wide net across parts categories
+    cities: ["sfbay", "losangeles", "sacramento", "monterey", "fresno", "bakersfield"]  # Expand search area
+    max_pages: 5  # More pages for parts
+    listing_type: "base"  # Parts are not vehicles
+    
+    storage:
+      filename: "forester_parts_listings.json"
+    
+    scoring:
+      # HIGH PRIORITY - Performance Parts
+      - keywords: ["sti", "s.t.i", "spec c", "prodrive", "cobb", "invidia", "hks", "greddy", "apexi"]
+        points: 30
+      
+      - keywords: ["rally", "wrc", "stage", "tuned", "chipped", "mapped", "performance"]
+        points: 25
+      
+      - keywords: ["roll cage", "rollbar", "cage", "harness", "bucket seats", "racing seats"]
+        points: 25
+      
+      # ENGINE & DRIVETRAIN
+      - keywords: ["engine", "motor", "short block", "long block", "heads", "cam", "turbo", "intercooler"]
+        points: 20
+      
+      - keywords: ["transmission", "drivetrain", "driveshaft", "axle", "differential", "rear diff", "front diff"]
+        points: 20
+      
+      - keywords: ["clutch", "flywheel", "pressure plate", "throwout bearing"]
+        points: 15
+      
+      # SUSPENSION & BRAKES
+      - keywords: ["suspension", "coilovers", "shocks", "struts", "springs", "lowering", "lift"]
+        points: 18
+      
+      - keywords: ["brakes", "calipers", "rotors", "pads", "discs", "big brake kit", "brembo"]
+        points: 15
+      
+      # WHEELS & TIRES
+      - keywords: ["wheels", "rims", "tires", "tires and wheels", "wheel and tire", "snow tires"]
+        points: 12
+      
+      # YEAR SPECIFIC - First Gen Focus
+      - keywords: ["ej20", "first gen", "sf5", "1998", "1999", "2000", "2001", "2002", "2003", "2004", "sg", "sh"]
+        points: 15
+      
+      # CUSTOM & EXTERNAL PARTS
+      - keywords: ["custom", "aftermarket", "jdm", "japanese", "import", "rally car"]
+        points: 15
+      
+      - keywords: ["exhaust", "header", "downpipe", "catback", "muffler", "tip"]
+        points: 12
+      
+      # SPECIFIC PARTS
+      - keywords: ["ecu", "computer", "tune", "chip", "harness", "wiring"]
+        points: 10
+      
+      - keywords: ["intake", "air filter", "cold air", "ram air", "maf"]
+        points: 8
+      
+      - keywords: ["radiator", "cooling", "fan", "hose", "thermostat"]
+        points: 8
+      
+      - keywords: ["oil", "fluid", "filter", "maintenance", "kit", "gasket", "seal"]
+        points: 5
+      
+      # NEGATIVE FILTERS - Things we don't want
+      - keywords: ["engineworld.com"]
+        points: -100
+      
+      - keywords: ["dealer", "dealership", "financing", "payment plan", "credit"]
+        points: -25
+      
+      - keywords: ["ship", "shipping", "delivery", "freight"]
+        points: -15  # Prefer local pickup for parts
