@@ -62,15 +62,23 @@ searches:
       - keywords: ["radiator", "cooling", "fan", "hose", "thermostat"]
         points: 8
       
-      - keywords: ["oil", "fluid", "filter", "maintenance", "kit", "gasket", "seal"]
+      - keywords: ["filter", "maintenance", "kit", "gasket", "seal"]
         points: 5
       
       # NEGATIVE FILTERS - Things we don't want
-      - keywords: ["engineworld.com"]
-        points: -100
-      
       - keywords: ["dealer", "dealership", "financing", "payment plan", "credit"]
         points: -25
       
       - keywords: ["ship", "shipping", "delivery", "freight"]
         points: -15  # Prefer local pickup for parts
+
+      - keywords: ["2018", "2019", "2020", "2021", "2023", "2024", "2025", "2026"]
+        points: -35
+        match: title
+
+      - keywords: ["2018", "2019", "2020", "2021", "2023", "2024", "2025", "2026"]
+        points: -10
+        match: description
+      
+      - keywords: ["engineworld.com"]
+        points: -100

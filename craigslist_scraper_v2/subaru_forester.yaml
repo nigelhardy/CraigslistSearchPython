@@ -12,15 +12,24 @@ searches:
     scoring:
       - keywords: ["manual", "5-speed", "5 speed", "6-speed", "6 speed", "standard transmission"]
         points: 25
+        match: title
+        match_type: whole
+      
+      - keywords: ["xt"]
+        points: 10
+        match: title
+        match_type: whole  # Only whole word "xt" not "ext" or "text"
       
       - keywords: ["first gen", "sf5", "1998", "1999", "2000", "2001", "2002", "2003", "2004"]
         points: 20
       
       - keywords: ["low miles", "low mileage", "under 100k", "under 80k", "under 60k"]
         points: 15
+        match: description
       
       - keywords: ["clean title", "title in hand"]
         points: 10
+        match: title
       
       - keywords: ["rust free", "no rust", "garage kept", "one owner", "1-owner", "1 owner"]
         points: 8
@@ -30,15 +39,38 @@ searches:
       
       - keywords: ["automatic", "auto", "cvt", "cvt transmission"]
         points: -10
+        match: title
       
       - keywords: ["2.5t", "wrx engine swap"]
         points: -15
       
       - keywords: ["salvage", "salvage title", "rebuilt title", "flood damage"]
         points: -25
+        match: title
       
       - keywords: ["dealer", "dealership", "lot", "financing available"]
         points: -20
       
       - keywords: ["needs work", "project", "parts car", "mechanic special"]
         points: -15
+      
+      # Example: turbo points only if NOT a WRX (excludes)
+      - keywords: ["turbo"]
+        points: 5
+        excludes: ["wrx", " STI", "sti"]
+      
+      # Example: only apply points if certain condition met (requires)
+      - keywords: ["wrap"]
+        points: 15
+        requires: ["canvas", "vinyl"]  # wrapped vehicle must have mention of wrap material
+
+      - keywords: ["we rebuild subaru engines"]
+        points: -100
+        match: title
+      
+    
+    deduplication:
+      enabled: true
+      similarity_threshold: 0.85  # 0.0-1.0, higher = stricter
+      min_title_length: 30  # titles shorter than this won't be compared
+      max_age_days: 90  # listings older than this are removed

@@ -15,7 +15,7 @@ from config import load_config
 from storage import ListingStorage
 from fetcher import create_fetcher, FetcherConfig
 from engine import SearchEngine
-from ranking import rank_listings
+from ranking import rank_listings, DuplicateFilter
 from display import display_listings
 from parsers import CraigslistListingParser
 
@@ -121,7 +121,32 @@ def main():
     print(f"   ✅ Processed: {len(processed_listings)}")
     print(f"   ⏳ Unprocessed: {len(unprocessed_listings)}")
     print(f"   📊 Total: {len(all_listings)}\n")
-    ranked_listings = rank_listings(processed_listings, config.scoring_rules)
+    
+    # Apply duplicate filtering and age decay
+    dedup = config.dedup_config
+    dup_filter = DuplicateFilter(
+        similarity_threshold=dedup.similarity_threshold, 
+        min_title_length=dedup.min_title_length
+    )
+    
+    # Get existing titles from storage for comparison
+    existing_titles = [l.title for l in all_listings if l.title]
+    
+    # Filter duplicates from processed listings
+    filtered_listings, _ = dup_filter.filter_duplicates(processed_listings, existing_titles)
+    
+    if len(filtered_listings) < len(processed_listings):
+        print(f"🔄 Filtered {len(processed_listings) - len(filtered_listings)} duplicate listings\n")
+    
+    # Apply age decay (remove old listings to keep performance)
+    if dedup.max_age_days:
+        filtered_listings = dup_filter.filter_age_decay(filtered_listings, max_age_days=dedup.max_age_days)
+    
+    if len(filtered_listings) < len(processed_listings):
+        removed_count = len(processed_listings) - len(filtered_listings)
+        print(f"🗑️  Removed {removed_count} listings older than 90 days\n")
+    
+    ranked_listings = rank_listings(filtered_listings, config.scoring_rules)
     
     # Step 7: Display
     output_path = Path(args.output) if args.output else None

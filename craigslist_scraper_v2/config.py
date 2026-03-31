@@ -1,14 +1,35 @@
 """Configuration loading."""
 import yaml
 from pathlib import Path
-from dataclasses import dataclass
-from typing import List, Dict, Any
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
 
 
 @dataclass
 class ScoringRule:
     keywords: List[str]
     points: int
+    match: str = "both"  # "title", "description", or "both"
+    match_type: str = "partial"  # "partial" or "whole" (word boundary)
+    requires: List[str] = field(default_factory=list)  # keywords that must all be present
+    excludes: List[str] = field(default_factory=list)  # keywords that must NOT be present
+
+
+@dataclass
+class DedupConfig:
+    enabled: bool = True
+    similarity_threshold: float = 0.85
+    min_title_length: int = 30
+    max_age_days: int = 90
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'DedupConfig':
+        return cls(
+            enabled=data.get('enabled', True),
+            similarity_threshold=data.get('similarity_threshold', 0.85),
+            min_title_length=data.get('min_title_length', 30),
+            max_age_days=data.get('max_age_days', 90)
+        )
 
 
 @dataclass
@@ -20,6 +41,7 @@ class SearchConfig:
     storage_filename: str
     listing_type: str
     scoring_rules: List[ScoringRule]
+    dedup_config: DedupConfig = field(default_factory=DedupConfig)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SearchConfig':
@@ -30,8 +52,15 @@ class SearchConfig:
         for rule in scoring_data:
             scoring_rules.append(ScoringRule(
                 keywords=rule.get('keywords', []),
-                points=rule.get('points', 0)
+                points=rule.get('points', 0),
+                match=rule.get('match', 'both'),
+                match_type=rule.get('match_type', 'partial'),
+                requires=rule.get('requires', []),
+                excludes=rule.get('excludes', [])
             ))
+        
+        dedup_data = data.get('deduplication', {})
+        dedup_config = DedupConfig.from_dict(dedup_data) if dedup_data else DedupConfig()
         
         return cls(
             query=data.get('query', ''),
@@ -40,7 +69,8 @@ class SearchConfig:
             max_pages=data.get('max_pages', 3),
             storage_filename=storage.get('filename', 'listings.json'),
             listing_type=data.get('listing_type', 'base'),
-            scoring_rules=scoring_rules
+            scoring_rules=scoring_rules,
+            dedup_config=dedup_config
         )
 
 
