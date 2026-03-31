@@ -1,145 +1,91 @@
-"""
-Configuration settings for Craigslist scraper.
-"""
+"""Configuration loading."""
+import yaml
+from pathlib import Path
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
 
-from dataclasses import dataclass
-from typing import Dict, Any, List
+
+@dataclass
+class ScoringRule:
+    keywords: List[str]
+    points: int
+    match: str = "both"  # "title", "description", or "both"
+    match_type: str = "partial"  # "partial" or "whole" (word boundary)
+    requires: List[str] = field(default_factory=list)  # keywords that must all be present
+    excludes: List[str] = field(default_factory=list)  # keywords that must NOT be present
+
+
+@dataclass
+class DedupConfig:
+    enabled: bool = True
+    similarity_threshold: float = 0.85
+    min_title_length: int = 30
+    max_age_days: int = 90
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'DedupConfig':
+        return cls(
+            enabled=data.get('enabled', True),
+            similarity_threshold=data.get('similarity_threshold', 0.85),
+            min_title_length=data.get('min_title_length', 30),
+            max_age_days=data.get('max_age_days', 90)
+        )
 
 
 @dataclass
 class SearchConfig:
-    """Configuration for a specific search area."""
     query: str
-    city: str
-    categories: List[str]  # Now supports multiple categories
-    filters: Dict[str, Any]
-    name: str
-    description: str
-
-
-class Config:
-    """Main configuration class containing all application settings."""
-
-    # Search configurations
-    SEARCH_CONFIGS = {
-        "SC": SearchConfig(
-            query="",
-            city="sfbay",
-            categories=["apa"],
-            filters={
-                "max_price": 3300,
-                "lat": 36.9677,
-                "lon": -121.985,
-                "search_distance": 10,
-            },
-            name="Santa Cruz",
-            description="Santa Cruz apartment search near boardwalk"
-        ),
-        "LG": SearchConfig(
-            query="",
-            city="sfbay",
-            categories=["apa"],
-            filters={
-                "max_price": 4000,
-                "postal": 95030,
-                "search_distance": 5
-            },
-            name="Los Gatos",
-            description="Los Gatos apartment search near work"
-        ),
-        "E39_PARTS": SearchConfig(
-            query="e39",
-            city="sfbay",
-            categories=["pta", "wta"],  # auto parts and wheels/tires (correct codes)
-            filters={
-                "max_price": 1000,  # Reasonable max for most parts
-                "min_price": 10,    # Avoid super cheap junk
-            },
-            name="BMW E39 Parts",
-            description="BMW E39 540i parts search in multiple categories"
-        ),
-        "SUBARU_FORESTER_BRAKES": SearchConfig(
-            query="subaru brakes",
-            city="sfbay",
-            categories=["pts", "wta", "pta"],  # Auto parts, wheels/tires, all parts
-            filters={},  # No price limits as requested
-            name="Subaru Forester Brakes",
-            description="SF Bay Area + West Coast Subaru brake upgrade parts search - 1st gen Forester compatible"
-        ),
-        "SUBARU_FORESTER_SUSPENSION": SearchConfig(
-            query="forester suspension",
-            city="sfbay", 
-            categories=["pts", "wta", "pta"],  # Auto parts, wheels/tires, all parts
-            filters={},  # No price limits
-            name="Subaru Forester Suspension", 
-            description="SF Bay Area + West Coast Subaru suspension upgrade parts search - 1st gen Forester compatible"
-        ),
-        "SUBARU_PERFORMANCE": SearchConfig(
-            query="subaru forester impreza wrx sti coilovers rally racing seats brakes tires performance parts auto wrecker parts car",
-            city="sfbay",
-            categories=["pts", "wta", "pta"],  # Auto parts, wheels/tires, all parts
-            filters={},  # No price limits as requested
-            name="Subaru Performance Parts",
-            description="Wide Subaru performance parts search - coilovers, rally, racing, STI, 1997-2004 Forester priority"
-        ),
-        "SUBARU_FORESTER": SearchConfig(
-            query="subaru forester",
-            city="sfbay",
-            categories=["cto"],  # Cars and trucks by owner
-            filters={},  # No price limits as requested
-            name="Subaru Forester Cars",
-            description="1st gen Forester search - manual transmission, low mileage, one owner, non-turbo, affordable"
+    categories: List[str]
+    cities: List[str]
+    max_pages: int
+    storage_filename: str
+    listing_type: str
+    scoring_rules: List[ScoringRule]
+    dedup_config: DedupConfig = field(default_factory=DedupConfig)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SearchConfig':
+        storage = data.get('storage', {})
+        scoring_data = data.get('scoring', [])
+        
+        scoring_rules = []
+        for rule in scoring_data:
+            scoring_rules.append(ScoringRule(
+                keywords=rule.get('keywords', []),
+                points=rule.get('points', 0),
+                match=rule.get('match', 'both'),
+                match_type=rule.get('match_type', 'partial'),
+                requires=rule.get('requires', []),
+                excludes=rule.get('excludes', [])
+            ))
+        
+        dedup_data = data.get('deduplication', {})
+        dedup_config = DedupConfig.from_dict(dedup_data) if dedup_data else DedupConfig()
+        
+        return cls(
+            query=data.get('query', ''),
+            categories=data.get('categories', []),
+            cities=data.get('cities', []),
+            max_pages=data.get('max_pages', 3),
+            storage_filename=storage.get('filename', 'listings.json'),
+            listing_type=data.get('listing_type', 'base'),
+            scoring_rules=scoring_rules,
+            dedup_config=dedup_config
         )
-    }
-
-    # File paths and naming
-    DATA_FILE_TEMPLATE = "listings_{}.pkl"
-    UNWANTED_FILE_TEMPLATE = "unwanted_listings_{}.pkl"
-    HTML_PREVIEW_FILE = "email_preview.html"
-
-    # Email settings
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 587
-    EMAIL_SUBJECT_TEMPLATE = "New Apartment Listings! {}"
-
-    # Environment variable names
-    ENV_SENDER_EMAIL = "EMAIL_SENDER_ADDRESS"
-    ENV_RECEIVER_EMAIL = "EMAIL_RECEIVER_ADDRESS"
-    ENV_EMAIL_PASSWORD = "EMAIL_PASSWORD"
-
-    # Default application settings
-    DEFAULT_MAX_FETCHES = -1  # -1 means no limit
-    DEFAULT_WAIT_MS = 5000     # 5 second default wait to avoid rate limiting
-    DEFAULT_SEARCH_TYPE = "SC"
-
-    # Available search types for CLI
-    AVAILABLE_SEARCH_TYPES = list(SEARCH_CONFIGS.keys())
-
-    # Rate limiting and error handling
-    MAX_CONSECUTIVE_FAILS = 5
-    SIMILARITY_THRESHOLD_TITLE = 0.9
-    SIMILARITY_THRESHOLD_DESC = 0.8
-    MIN_TITLE_LENGTH_FOR_SIMILARITY = 25
-    MIN_DESC_LENGTH_FOR_SIMILARITY = 25
-
-    # Application metadata
-    APP_NAME = "Craigslist Rental Scraper"
-    VERSION = "1.0.0"
 
 
-# Convenience functions for getting configurations
-def get_search_config(search_type: str) -> SearchConfig:
-    """Get search configuration for the specified type."""
-    if search_type not in Config.SEARCH_CONFIGS:
-        raise ValueError(f"Unknown search type: {search_type}")
-    return Config.SEARCH_CONFIGS[search_type]
-
-
-def get_data_file_path(search_type: str) -> str:
-    """Get the data file path for the specified search type."""
-    return Config.DATA_FILE_TEMPLATE.format(search_type)
-
-
-def get_unwanted_file_path(search_type: str) -> str:
-    """Get the unwanted results file path for the specified search type."""
-    return Config.UNWANTED_FILE_TEMPLATE.format(search_type)
+def load_config(config_path: Path) -> SearchConfig:
+    """Load YAML config for queries, ranking, and storage."""
+    with open(config_path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f)
+    
+    # Get the first search configuration (supports multiple search types)
+    searches = data['searches']
+    if not searches:
+        raise ValueError("No searches found in config")
+    
+    # Get the first search key (e.g., 'subaru_forester', 'subaru_forester_parts')
+    search_name = next(iter(searches))
+    search_data = searches[search_name]
+    
+    return SearchConfig.from_dict(search_data)
