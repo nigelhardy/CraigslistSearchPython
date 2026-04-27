@@ -101,6 +101,11 @@ def do_parse_raw(config, storage, args, fetcher):
                 skipped_count += 1
                 continue
             
+            # Extract original Craigslist URL from meta tag
+            from bs4 import BeautifulSoup
+            meta_url = soup.find('meta', property='og:url')
+            original_url = meta_url.get('content') if meta_url else None
+            
             base_listing = Listing(
                 url=f"file://{html_file.absolute()}",
                 title=html_file.stem.replace('_', ' '),
@@ -113,6 +118,10 @@ def do_parse_raw(config, storage, args, fetcher):
             listing = parser.parse(soup, base_listing)
 
             if listing:
+                # Use real Craigslist URL as primary URL
+                if original_url:
+                    listing.url = original_url
+                
                 storage.add_listing(listing)
                 storage.save()
                 parsed_count += 1

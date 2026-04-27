@@ -10,7 +10,7 @@ A Craigslist scraper that searches multiple categories, scores/ranks listings, r
 # 1. Fetch fresh data and save raw HTML (do this once to get sample data)
 python main.py --config config/subaru_forester.yaml --fetch --save-raw --clear
 
-# 2. Parse saved HTML files into storage
+# 2. Parse saved HTML files into storage (extracts real URLs from meta tags)
 python main.py --config config/subaru_forester.yaml --parse-raw
 
 # 3. Display current ranking
@@ -19,6 +19,8 @@ python main.py --config config/subaru_forester.yaml --display
 # 4. Edit config/scoring rules, then re-display
 python main.py --config config/subaru_forester.yaml --display
 ```
+
+**Note:** The saved raw HTML contains `og:url` meta tags with the original Craigslist URLs. When parsing with `--parse-raw`, these real URLs are extracted and used as the primary link, so results show actual Craigslist links even when using saved data.
 
 ### Production Workflow (fetch live data)
 
