@@ -3,3 +3,5 @@
 email_preview.html
 __pycache__
 .DS_Store
+*.json
+raw_data/

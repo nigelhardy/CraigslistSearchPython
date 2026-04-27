@@ -108,7 +108,8 @@ def display_listings(listings: List[Listing], query: str, output_path: Optional[
     
     if output_path is None:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_path = Path(f"search_results_{timestamp}.html")
+        output_path = Path(f"outputs/results/search_results_{timestamp}.html")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
     
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html)

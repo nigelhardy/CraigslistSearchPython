@@ -27,8 +27,8 @@ def parse_args():
                        help='Fetch N new listings (omit for unlimited)')
     parser.add_argument('--clear', action='store_true', help='Clear storage first')
     parser.add_argument('--output', type=str, default='', help='Output HTML filename')
-    parser.add_argument('--config', type=str, default='simple_config_v2.yaml',
-                       help='Config file path')
+    parser.add_argument('--config', type=str, default='config/subaru_forester.yaml',
+                       help='Config file path (relative to project root)')
     parser.add_argument('--save-raw', action='store_true', help='Save raw HTML files for debugging')
     return parser.parse_args()
 
@@ -48,7 +48,7 @@ def main():
     print(f"   Cities: {', '.join(config.cities)}\n")
     
     # Step 2: Load previous results
-    storage_path = Path(__file__).parent / config.storage_filename
+    storage_path = Path(__file__).parent / "data" / config.storage_filename
     storage = ListingStorage(storage_path)
     if args.clear:
         storage.clear()
@@ -60,7 +60,7 @@ def main():
     raw_data_dir = None
     if args.save_raw:
         config_name = Path(args.config).stem  # Get filename without extension
-        raw_data_dir = Path(__file__).parent / "raw_data" / config_name
+        raw_data_dir = Path(__file__).parent / "data" / "raw_data" / config_name
         print(f"💾 Raw HTML will be saved to: {raw_data_dir}\n")
     
     fetcher = create_fetcher(fetcher_config, mode="live", raw_data_dir=raw_data_dir)
