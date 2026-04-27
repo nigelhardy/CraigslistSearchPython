@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Craigslist Scraper
-Usage: python main.py --config <config-file> [--fetch] [--display] [--parse-raw] [--save-raw] [--clear]
+Usage: python main.py --config <config-file> [--fetch] [--display] [--parse-raw] [--save-raw] [--clear] [--email]
 """
 
 import sys
@@ -18,6 +18,7 @@ from ranking import rank_listings, DuplicateFilter
 from display import display_listings
 from parsers import CraigslistListingParser
 from models import Listing
+from notifications import notify_matches
 
 
 def parse_args():
@@ -38,6 +39,8 @@ def parse_args():
                        help='Clear storage before operation')
     parser.add_argument('--output', type=str, default='',
                        help='Output HTML filename')
+    parser.add_argument('--email', action='store_true',
+                       help='Send email notification for high-scoring listings')
     return parser.parse_args()
 
 
@@ -136,7 +139,6 @@ def do_display(config, storage, ranked_listings, args):
     if args.output:
         output_path = Path(args.output)
     else:
-        # Derive a stable, browser-refreshable path from the config filename
         config_stem = Path(args.config).stem
         output_path = Path(f"outputs/results/{config_stem}.html")
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -148,6 +150,30 @@ def do_display(config, storage, ranked_listings, args):
         print(f"  {i}. Score: {listing.score:5.1f} | Price: {price_str:>10} | {listing.title[:50]}")
 
     print(f"\n🎉 Results: {saved_path}")
+
+
+def do_notify(config, ranked_listings, args):
+    if not args.email:
+        return
+
+    notify_config = config.notification_config
+    if not notify_config.enabled:
+        print("📧 Email notifications disabled in config")
+        return
+
+    threshold = notify_config.min_score
+    high_score_listings = [l for l in ranked_listings if l.score >= threshold]
+    high_score_listings = high_score_listings[:notify_config.max_listings]
+
+    if not high_score_listings:
+        print("📧 No listings above score threshold for notification")
+        return
+
+    search_name = Path(args.config).stem
+    success = notify_matches(high_score_listings, search_name, score_threshold=threshold)
+    
+    if success:
+        print(f"📧 Email sent with {len(high_score_listings)} listings (score >= {threshold})")
 
 
 def rank_and_filter(storage, config, args):
@@ -234,11 +260,13 @@ def main():
         ranked_listings = rank_and_filter(storage, config, args)
         if ranked_listings:
             do_display(config, storage, ranked_listings, args)
+            do_notify(config, ranked_listings, args)
     else:
         print("📂 Display mode (use --fetch or --parse-raw to collect data)")
         ranked_listings = rank_and_filter(storage, config, args)
         if ranked_listings:
             do_display(config, storage, ranked_listings, args)
+            do_notify(config, ranked_listings, args)
 
 
 if __name__ == "__main__":

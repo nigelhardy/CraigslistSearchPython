@@ -74,3 +74,8 @@ searches:
       similarity_threshold: 0.85  # 0.0-1.0, higher = stricter
       min_title_length: 30  # titles shorter than this won't be compared
       max_age_days: 90  # listings older than this are removed
+    
+    notifications:
+      enabled: true
+      min_score: 20  # Only notify for listings scoring above this threshold
+      max_listings: 20  # Maximum listings to include in email

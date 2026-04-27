@@ -57,6 +57,7 @@ python main.py --config config/subaru_forester.yaml --parse-raw --clear
 | `--clear` | Clear storage before operation |
 | `--no-dedup` | Skip duplicate filtering (useful for re-parsing same data) |
 | `--output <file>` | Output HTML filename |
+| `--email` | Send email notification for high-scoring listings |
 
 ## Project Structure
 
@@ -70,6 +71,7 @@ python main.py --config config/subaru_forester.yaml --parse-raw --clear
 ├── display.py        # HTML output generation
 ├── storage.py        # JSON persistence
 ├── models.py         # Data classes
+├── notifications.py  # Email notification service
 
 config/               # Configuration files
 ├── subaru_forester.yaml
@@ -115,6 +117,31 @@ Config files in `config/` define:
 - `storage.filename`: Output JSON file
 - `scoring`: List of keyword scoring rules (see existing configs for examples)
 - `deduplication`: similarity threshold, max_age_days
+- `notifications`: enabled, min_score, max_listings
+
+## Email Notifications
+
+Configure in `.env` (create if not exists):
+```
+EMAIL_SENDER_ADDRESS=your@gmail.com
+EMAIL_RECEIVER_ADDRESS=recipient@example.com
+EMAIL_PASSWORD=your_app_password
+```
+
+Then configure in YAML:
+```yaml
+notifications:
+  enabled: true
+  min_score: 20   # Only notify for listings scoring >= 20
+  max_listings: 20
+```
+
+Run with `--email` flag:
+```bash
+python main.py --config config/subaru_forester.yaml --display --email
+```
+
+**Note**: For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password.
 
 ## Data Flow
 

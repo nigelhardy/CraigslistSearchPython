@@ -68,6 +68,21 @@ class DedupConfig:
 
 
 @dataclass
+class NotificationConfig:
+    enabled: bool = False
+    min_score: float = 0  # Only notify for listings above this score
+    max_listings: int = 20  # Maximum listings to include in email
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'NotificationConfig':
+        return cls(
+            enabled=data.get('enabled', False),
+            min_score=data.get('min_score', 0),
+            max_listings=data.get('max_listings', 20)
+        )
+
+
+@dataclass
 class SearchConfig:
     query: str
     categories: List[str]
@@ -78,6 +93,7 @@ class SearchConfig:
     scoring_rules: List[ScoringRule]
     price_rules: List[PriceRule] = field(default_factory=list)
     dedup_config: DedupConfig = field(default_factory=DedupConfig)
+    notification_config: NotificationConfig = field(default_factory=NotificationConfig)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SearchConfig':
@@ -102,6 +118,9 @@ class SearchConfig:
         dedup_data = data.get('deduplication', {})
         dedup_config = DedupConfig.from_dict(dedup_data) if dedup_data else DedupConfig()
 
+        notification_data = data.get('notifications', {})
+        notification_config = NotificationConfig.from_dict(notification_data) if notification_data else NotificationConfig()
+
         return cls(
             query=data.get('query', ''),
             categories=data.get('categories', []),
@@ -111,7 +130,8 @@ class SearchConfig:
             listing_type=data.get('listing_type', 'base'),
             scoring_rules=scoring_rules,
             price_rules=price_rules,
-            dedup_config=dedup_config
+            dedup_config=dedup_config,
+            notification_config=notification_config
         )
 
 
