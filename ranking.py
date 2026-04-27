@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 
 from models import Listing, VehicleListing, ListingState
-from config import ScoringRule
+from config import ScoringRule, PriceRule
 
 
 def levenshtein_distance(s1: str, s2: str) -> int:
@@ -118,9 +118,10 @@ class DuplicateFilter:
 
 class ListingRanker:
     """Ranks listings based on configuration rules."""
-    
-    def __init__(self, scoring_rules: List[ScoringRule]):
+
+    def __init__(self, scoring_rules: List[ScoringRule], price_rules: Optional[List[PriceRule]] = None):
         self.scoring_rules = scoring_rules
+        self.price_rules: List[PriceRule] = price_rules or []
     
     def rank(self, listings: List[Listing]) -> List[Listing]:
         """Rank listings by calculating scores. Modifies listings in place."""
@@ -221,6 +222,26 @@ class ListingRanker:
                         reasons.append(f"'{keyword}' ({rule.points})")
                     break
         
+        # ── Price rules ──────────────────────────────────────
+        for rule in self.price_rules:
+            triggered = False
+            label = ""
+            if rule.no_price and listing.price is None:
+                triggered = True
+                label = "no price listed"
+            elif listing.price is not None:
+                if rule.above is not None and listing.price > rule.above:
+                    triggered = True
+                    label = f"${listing.price:,} > ${rule.above:,}"
+                elif rule.below is not None and listing.price < rule.below:
+                    triggered = True
+                    label = f"${listing.price:,} < ${rule.below:,}"
+            if triggered:
+                score += rule.points
+                breakdown[f"price:{label}"] = rule.points
+                sign = f"+{rule.points}" if rule.points >= 0 else str(rule.points)
+                reasons.append(f"price {label} ({sign})")
+
         listing.score = score
         listing.score_breakdown = breakdown
         listing.score_reasons = reasons
@@ -228,7 +249,8 @@ class ListingRanker:
         listing.last_updated = datetime.now().isoformat()
 
 
-def rank_listings(listings: List[Listing], scoring_rules: List[ScoringRule]) -> List[Listing]:
+def rank_listings(listings: List[Listing], scoring_rules: List[ScoringRule],
+                  price_rules: Optional[List[PriceRule]] = None) -> List[Listing]:
     """Rank each listing based on scoring rules."""
-    ranker = ListingRanker(scoring_rules)
+    ranker = ListingRanker(scoring_rules, price_rules)
     return ranker.rank(listings)

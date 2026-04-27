@@ -133,7 +133,13 @@ def do_parse_raw(config, storage, args, fetcher):
 
 
 def do_display(config, storage, ranked_listings, args):
-    output_path = Path(args.output) if args.output else None
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        # Derive a stable, browser-refreshable path from the config filename
+        config_stem = Path(args.config).stem
+        output_path = Path(f"outputs/results/{config_stem}.html")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
     saved_path = display_listings(ranked_listings, config.query, output_path)
 
     print(f"\n🏆 TOP 5:")
@@ -158,7 +164,7 @@ def rank_and_filter(storage, config, args):
     # Skip dedup if --no-dedup flag
     if getattr(args, 'no_dedup', False):
         print("   Skipping duplicate filtering (--no-dedup)")
-        return rank_listings(processed_listings, config.scoring_rules)
+        return rank_listings(processed_listings, config.scoring_rules, config.price_rules)
 
     dedup = config.dedup_config
     dup_filter = DuplicateFilter(
@@ -166,8 +172,14 @@ def rank_and_filter(storage, config, args):
         min_title_length=dedup.min_title_length
     )
 
-    existing_titles = [l.title for l in all_listings if l.title]
-    print(f"   Titles sample: {existing_titles[:3]}")
+    # existing_titles feeds the cross-session duplicate check — it must NOT include
+    # the titles of the listings we are about to score, or every listing would look
+    # like a duplicate of itself and get filtered out.
+    processed_urls = {l.url for l in processed_listings}
+    existing_titles = [l.title for l in all_listings
+                       if l.title and l.url not in processed_urls]
+    sample = [l.title for l in processed_listings[:3]]
+    print(f"   Titles sample: {sample}")
     
     before_count = len(processed_listings)
     filtered, all_titles = dup_filter.filter_duplicates(processed_listings, existing_titles)
@@ -182,7 +194,7 @@ def rank_and_filter(storage, config, args):
         if len(filtered) < before:
             print(f"🗑️  Removed {before - len(filtered)} listings older than {dedup.max_age_days} days")
 
-    return rank_listings(filtered, config.scoring_rules)
+    return rank_listings(filtered, config.scoring_rules, config.price_rules)
 
 
 def main():

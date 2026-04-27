@@ -6,6 +6,41 @@ from typing import List, Dict, Any, Optional
 
 
 @dataclass
+class PriceRule:
+    """Award or penalise points based on the listing's numeric price.
+
+    Each rule has exactly one condition (above / below) and a points value.
+    All matching rules are applied, so you can stack a "great deal" bonus
+    on top of an "over budget" penalty independently.
+
+    Examples::
+
+        price_rules:
+          - above: 10000   # hard budget ceiling
+            points: -60
+          - below: 7000    # great deal
+            points: 25
+          - below: 8500    # decent deal
+            points: 10
+          - no_price: true # unpriced listings are suspicious
+            points: -10
+    """
+    points: int
+    above: Optional[int] = None   # trigger if price > above
+    below: Optional[int] = None   # trigger if price < below
+    no_price: bool = False        # trigger when price is absent
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PriceRule':
+        return cls(
+            points=data.get('points', 0),
+            above=data.get('above'),
+            below=data.get('below'),
+            no_price=data.get('no_price', False),
+        )
+
+
+@dataclass
 class ScoringRule:
     keywords: List[str]
     points: int
@@ -41,6 +76,7 @@ class SearchConfig:
     storage_filename: str
     listing_type: str
     scoring_rules: List[ScoringRule]
+    price_rules: List[PriceRule] = field(default_factory=list)
     dedup_config: DedupConfig = field(default_factory=DedupConfig)
     
     @classmethod
@@ -59,9 +95,13 @@ class SearchConfig:
                 excludes=rule.get('excludes', [])
             ))
         
+        price_rules = [
+            PriceRule.from_dict(r) for r in data.get('price_rules', [])
+        ]
+
         dedup_data = data.get('deduplication', {})
         dedup_config = DedupConfig.from_dict(dedup_data) if dedup_data else DedupConfig()
-        
+
         return cls(
             query=data.get('query', ''),
             categories=data.get('categories', []),
@@ -70,6 +110,7 @@ class SearchConfig:
             storage_filename=storage.get('filename', 'listings.json'),
             listing_type=data.get('listing_type', 'base'),
             scoring_rules=scoring_rules,
+            price_rules=price_rules,
             dedup_config=dedup_config
         )
 
