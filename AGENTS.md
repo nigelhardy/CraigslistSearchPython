@@ -2,24 +2,59 @@
 
 A Craigslist scraper that searches multiple categories, scores/ranks listings, removes duplicates, and outputs formatted results.
 
-## Running the Application
+## Workflows
+
+### Develop Workflow (iterate on parser/ranker without fetching)
 
 ```bash
-# Default search (subaru_forester)
-python main.py --fetch
+# 1. Fetch fresh data and save raw HTML (do this once to get sample data)
+python main.py --config config/subaru_forester.yaml --fetch --save-raw --clear
 
-# Use different config
-python main.py --config config/forester_parts.yaml --fetch
+# 2. Parse saved HTML files into storage
+python main.py --config config/subaru_forester.yaml --parse-raw
 
-# Display existing listings without fetching new
-python main.py
+# 3. Display current ranking
+python main.py --config config/subaru_forester.yaml --display
 
-# Clear storage and fetch fresh
-python main.py --fetch --clear
-
-# Save raw HTML for debugging
-python main.py --fetch --save-raw
+# 4. Edit config/scoring rules, then re-display
+python main.py --config config/subaru_forester.yaml --display
 ```
+
+### Production Workflow (fetch live data)
+
+```bash
+# Fetch new listings (unlimited)
+python main.py --config config/subaru_forester.yaml --fetch
+
+# Fetch specific number per city/category
+python main.py --config config/subaru_forester.yaml --fetch 5
+
+# Fetch and save raw HTML for later analysis
+python main.py --config config/subaru_forester.yaml --fetch --save-raw
+
+# Clear storage and re-fetch
+python main.py --config config/subaru_forester.yaml --fetch --clear
+```
+
+### Parse-Only Workflow
+
+```bash
+# Re-parse existing raw HTML files (after fixing parser)
+python main.py --config config/subaru_forester.yaml --parse-raw --clear
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `--config <file>` | **Required.** Config file path |
+| `--fetch [N]` | Fetch listings. N = specific count, omit = unlimited |
+| `--display` | Display ranked results from existing storage |
+| `--parse-raw` | Parse raw HTML files from `data/raw_data/` into storage |
+| `--save-raw` | Save raw HTML when fetching |
+| `--clear` | Clear storage before operation |
+| `--no-dedup` | Skip duplicate filtering (useful for re-parsing same data) |
+| `--output <file>` | Output HTML filename |
 
 ## Project Structure
 
@@ -41,7 +76,9 @@ config/               # Configuration files
 
 data/                 # State (JSON - gitignored)
 ├── *.json           # Listing data
-└── raw_data/        # Raw HTML cache
+└── raw_data/        # Raw HTML cache (gitignored)
+    └── <config>/    # One subdir per config
+        └── *.html
 
 outputs/
 ├── simple_html.py
@@ -86,3 +123,11 @@ Config files in `config/` define:
 5. `ranking.py` applies scoring rules + deduplication
 6. `display.py` generates HTML output
 7. `storage.py` persists to JSON
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `parsers/craigslist_parser.py` | Extracts data from Craigslist HTML |
+| `ranking.py` | Scores listings, filters duplicates |
+| `config/*.yaml` | Defines search params and scoring rules |

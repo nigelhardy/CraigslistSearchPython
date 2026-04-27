@@ -25,6 +25,7 @@ class Fetcher(Protocol):
     
     def fetch_search_page(self, url: str) -> Optional[BeautifulSoup]: ...
     def fetch_listing_detail(self, url: str) -> Optional[BeautifulSoup]: ...
+    def parse_html(self, html_content: str) -> BeautifulSoup: ...
 
 
 class CraigslistFetcher:
@@ -123,6 +124,10 @@ class CraigslistFetcher:
     
     def fetch_listing_detail(self, url: str) -> Optional[BeautifulSoup]:
         return self._fetch_with_retry(url)
+    
+    def parse_html(self, html_content: str) -> BeautifulSoup:
+        """Parse HTML content into BeautifulSoup."""
+        return BeautifulSoup(html_content, 'html.parser')
 
 
 class FileFetcher:
@@ -199,6 +204,10 @@ class FileFetcher:
     def get_available_urls(self) -> list:
         """Get list of URLs that have local files available."""
         return list(self._url_to_file_map.keys())
+    
+    def parse_html(self, html_content: str) -> BeautifulSoup:
+        """Parse HTML content into BeautifulSoup."""
+        return BeautifulSoup(html_content, 'html.parser')
 
 
 def create_fetcher(config: FetcherConfig, mode: str = "live", data_dir: Optional[Path] = None, raw_data_dir: Optional[Path] = None) -> Fetcher:

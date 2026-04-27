@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Craigslist Scraper v2 - Refactored with Clean Module Structure
-Main orchestration file - thin wrapper that calls other modules.
+Craigslist Scraper
+Usage: python main.py --config <config-file> [--fetch] [--display] [--parse-raw] [--save-raw] [--clear]
 """
 
 import sys
 import argparse
 from pathlib import Path
 
-# Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import load_config
@@ -18,147 +17,207 @@ from engine import SearchEngine
 from ranking import rank_listings, DuplicateFilter
 from display import display_listings
 from parsers import CraigslistListingParser
+from models import Listing
 
 
 def parse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Craigslist Scraper v2')
+    parser = argparse.ArgumentParser(description='Craigslist Scraper')
+    parser.add_argument('--config', required=True,
+                       help='Config file path (e.g., config/subaru_forester.yaml)')
+    parser.add_argument('--no-dedup', action='store_true',
+                       help='Skip duplicate filtering')
     parser.add_argument('--fetch', type=int, nargs='?', const=-1, default=None,
-                       help='Fetch N new listings (omit for unlimited)')
-    parser.add_argument('--clear', action='store_true', help='Clear storage first')
-    parser.add_argument('--output', type=str, default='', help='Output HTML filename')
-    parser.add_argument('--config', type=str, default='config/subaru_forester.yaml',
-                       help='Config file path (relative to project root)')
-    parser.add_argument('--save-raw', action='store_true', help='Save raw HTML files for debugging')
+                       help='Fetch listings: N (specific number) or omit (unlimited)')
+    parser.add_argument('--display', action='store_true',
+                       help='Display existing listings from storage (no fetch)')
+    parser.add_argument('--parse-raw', action='store_true',
+                       help='Parse raw HTML files from data/raw_data/ into storage')
+    parser.add_argument('--save-raw', action='store_true',
+                       help='Save raw HTML files when fetching')
+    parser.add_argument('--clear', action='store_true',
+                       help='Clear storage before operation')
+    parser.add_argument('--output', type=str, default='',
+                       help='Output HTML filename')
     return parser.parse_args()
 
 
-def main():
-    """Main orchestration following the 7-step plan."""
-    args = parse_args()
-    
-    print("🚀 Starting Craigslist Scraper v2\n")
-    
-    # Step 1: Load config
-    config_path = Path(__file__).parent / args.config
-    config = load_config(config_path)
-    print(f"⚙️  Config loaded: {config.query}")
-    print(f"   Type: {config.listing_type}")
-    print(f"   Storage: {config.storage_filename}")
-    print(f"   Cities: {', '.join(config.cities)}\n")
-    
-    # Step 2: Load previous results
-    storage_path = Path(__file__).parent / "data" / config.storage_filename
-    storage = ListingStorage(storage_path)
-    if args.clear:
-        storage.clear()
-    
-    # Create fetcher (always live mode for main.py)
-    fetcher_config = FetcherConfig(delay_ms=5000, max_retries=3)
-    
-    # Set up raw data directory if --save-raw flag is used
-    raw_data_dir = None
-    if args.save_raw:
-        config_name = Path(args.config).stem  # Get filename without extension
-        raw_data_dir = Path(__file__).parent / "data" / "raw_data" / config_name
-        print(f"💾 Raw HTML will be saved to: {raw_data_dir}\n")
-    
-    fetcher = create_fetcher(fetcher_config, mode="live", raw_data_dir=raw_data_dir)
-    
-    # Steps 3-5 (only if --fetch specified)
-    if args.fetch is not None:
-        print(f"🔎 Fetch mode: {'unlimited' if args.fetch <= 0 else args.fetch} new listings\n")
-        
-        # Step 3: Fetch search pages
-        engine = SearchEngine(fetcher)
-        search_results = engine.fetch_search_pages(config)
-        
-        # Step 4: Filter URLs - process X per city/category combination
-        urls_to_process = []
-        
-        if args.fetch is not None and args.fetch > 0:
-            # Distribute fetch limit evenly across combinations
-            per_combo_limit = max(1, args.fetch // max(1, search_results.get_combo_count()))
-            print(f"📋 Fetching up to {per_combo_limit} listings per city/category combination")
-            
-            for (city, category) in search_results.listings_by_combo.keys():
-                combo_listings = search_results.get_listings(city, category)
-                combo_new_urls = [l.url for l in combo_listings if not storage.is_seen(l.url)]
-                
-                # Take up to per_combo_limit URLs from this combo
-                combo_urls_to_process = combo_new_urls[:per_combo_limit]
-                urls_to_process.extend(combo_urls_to_process)
-                
-                print(f"🔍 {city}/{category}: {len(combo_urls_to_process)} new URLs selected from {len(combo_new_urls)} available")
-        else:
-            # Unlimited - get all new URLs
-            all_new_urls = [l.url for l in search_results.get_all_listings() if not storage.is_seen(l.url)]
-            urls_to_process = all_new_urls
-            print(f"🔍 Unlimited mode: {len(urls_to_process)} new URLs from {search_results.get_total_count()} total listings")
-        
-        # Step 5: Fetch listing details
-        if urls_to_process:
-            print(f"📋 Fetching details for {len(urls_to_process)} listings")
-            
-            from fetcher import fetch_listings as fetch_listing_details
-            parser = CraigslistListingParser()
-            fetch_listing_details(urls_to_process, search_results.get_all_listings(), config, fetcher, storage, parser)
+def do_fetch(config, storage, args, fetcher):
+    print(f"🔎 Fetch mode: {'unlimited' if args.fetch is None or args.fetch < 0 else args.fetch} new listings\n")
+
+    engine = SearchEngine(fetcher)
+    search_results = engine.fetch_search_pages(config)
+
+    urls_to_process = []
+
+    if args.fetch is not None and args.fetch > 0:
+        per_combo_limit = max(1, args.fetch // max(1, search_results.get_combo_count()))
+        print(f"📋 Fetching up to {per_combo_limit} listings per city/category combination")
+
+        for (city, category) in search_results.listings_by_combo.keys():
+            combo_listings = search_results.get_listings(city, category)
+            combo_new_urls = [l.url for l in combo_listings if not storage.is_seen(l.url)]
+            combo_urls_to_process = combo_new_urls[:per_combo_limit]
+            urls_to_process.extend(combo_urls_to_process)
+            print(f"🔍 {city}/{category}: {len(combo_urls_to_process)} new URLs from {len(combo_new_urls)} available")
     else:
-        print("📂 Display mode: showing existing listings\n")
-    
-    # Step 6: Rank listings (only fully processed ones)
-    processed_listings = storage.get_processed_listings()
-    all_listings = storage.get_all_listings()  # For stats only
-    
-    if not processed_listings:
-        url_count = len(all_listings)
-        print(f"❌ No processed listings found. Found {url_count} unprocessed URLs.")
-        print("💡 Use --fetch to download and process listing details.")
+        all_new_urls = [l.url for l in search_results.get_all_listings() if not storage.is_seen(l.url)]
+        urls_to_process = all_new_urls
+        print(f"🔍 Unlimited: {len(urls_to_process)} new URLs from {search_results.get_total_count()} total")
+
+    if urls_to_process:
+        print(f"📋 Fetching details for {len(urls_to_process)} listings")
+        from fetcher import fetch_listings as fetch_listing_details
+        parser = CraigslistListingParser()
+        fetch_listing_details(urls_to_process, search_results.get_all_listings(), config, fetcher, storage, parser)
+
+
+def do_parse_raw(config, storage, args, fetcher):
+    print("📂 Parse mode: reading raw HTML files\n")
+
+    config_name = Path(args.config).stem
+    raw_data_dir = Path(__file__).parent / "data" / "raw_data" / config_name
+
+    if not raw_data_dir.exists():
+        print(f"❌ Raw data directory not found: {raw_data_dir}")
+        print("💡 Run --fetch --save-raw first to collect raw HTML files")
         return
-    
-    unprocessed_listings = storage.get_unprocessed_listings()
-    print(f"📊 Processing {len(processed_listings)} of {len(all_listings)} total listings:")
-    print(f"   ✅ Processed: {len(processed_listings)}")
-    print(f"   ⏳ Unprocessed: {len(unprocessed_listings)}")
-    print(f"   📊 Total: {len(all_listings)}\n")
-    
-    # Apply duplicate filtering and age decay
-    dedup = config.dedup_config
-    dup_filter = DuplicateFilter(
-        similarity_threshold=dedup.similarity_threshold, 
-        min_title_length=dedup.min_title_length
-    )
-    
-    # Get existing titles from storage for comparison
-    existing_titles = [l.title for l in all_listings if l.title]
-    
-    # Filter duplicates from processed listings
-    filtered_listings, _ = dup_filter.filter_duplicates(processed_listings, existing_titles)
-    
-    if len(filtered_listings) < len(processed_listings):
-        print(f"🔄 Filtered {len(processed_listings) - len(filtered_listings)} duplicate listings\n")
-    
-    # Apply age decay (remove old listings to keep performance)
-    if dedup.max_age_days:
-        filtered_listings = dup_filter.filter_age_decay(filtered_listings, max_age_days=dedup.max_age_days)
-    
-    if len(filtered_listings) < len(processed_listings):
-        removed_count = len(processed_listings) - len(filtered_listings)
-        print(f"🗑️  Removed {removed_count} listings older than 90 days\n")
-    
-    ranked_listings = rank_listings(filtered_listings, config.scoring_rules)
-    
-    # Step 7: Display
+
+    parser = CraigslistListingParser()
+    parsed_count = 0
+    skipped_count = 0
+
+    for html_file in raw_data_dir.glob("*.html"):
+        if storage.is_seen(f"file://{html_file.name}"):
+            continue
+
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+
+            soup = fetcher.parse_html(html_content)
+            
+            if not parser.can_parse(soup):
+                print(f"  ⏭️  Skipping search result page: {html_file.name}")
+                skipped_count += 1
+                continue
+            
+            base_listing = Listing(
+                url=f"file://{html_file.absolute()}",
+                title=html_file.stem.replace('_', ' '),
+                price=None,
+                location='',
+                city=html_file.stem.split('_')[0] if '_' in html_file.stem else 'unknown',
+                category='raw'
+            )
+            
+            listing = parser.parse(soup, base_listing)
+
+            if listing:
+                storage.add_listing(listing)
+                storage.save()
+                parsed_count += 1
+                print(f"  ✅ Parsed: {listing.title[:60]}")
+        except Exception as e:
+            print(f"  ❌ Failed: {html_file.name} - {e}")
+
+    print(f"\n📊 Parsed {parsed_count} listing pages ({skipped_count} search pages skipped)")
+
+
+def do_display(config, storage, ranked_listings, args):
     output_path = Path(args.output) if args.output else None
     saved_path = display_listings(ranked_listings, config.query, output_path)
-    
-    # Summary
+
     print(f"\n🏆 TOP 5:")
     for i, listing in enumerate(ranked_listings[:5], 1):
         price_str = f"${listing.price:,}" if listing.price else "N/A"
         print(f"  {i}. Score: {listing.score:5.1f} | Price: {price_str:>10} | {listing.title[:50]}")
+
+    print(f"\n🎉 Results: {saved_path}")
+
+
+def rank_and_filter(storage, config, args):
+    processed_listings = storage.get_processed_listings()
+    all_listings = storage.get_all_listings()
+
+    if not processed_listings:
+        print("❌ No processed listings found.")
+        return []
+
+    unprocessed = storage.get_unprocessed_listings()
+    print(f"📊 {len(processed_listings)} of {len(all_listings)} listings processed")
+
+    # Skip dedup if --no-dedup flag
+    if getattr(args, 'no_dedup', False):
+        print("   Skipping duplicate filtering (--no-dedup)")
+        return rank_listings(processed_listings, config.scoring_rules)
+
+    dedup = config.dedup_config
+    dup_filter = DuplicateFilter(
+        similarity_threshold=dedup.similarity_threshold,
+        min_title_length=dedup.min_title_length
+    )
+
+    existing_titles = [l.title for l in all_listings if l.title]
+    print(f"   Titles sample: {existing_titles[:3]}")
     
-    print(f"\n🎉 Done! Results: {saved_path}")
+    before_count = len(processed_listings)
+    filtered, all_titles = dup_filter.filter_duplicates(processed_listings, existing_titles)
+    dup_count = before_count - len(filtered)
+
+    if dup_count > 0:
+        print(f"🔄 Filtered {dup_count} duplicates")
+
+    if dedup.max_age_days:
+        before = len(filtered)
+        filtered = dup_filter.filter_age_decay(filtered, max_age_days=dedup.max_age_days)
+        if len(filtered) < before:
+            print(f"🗑️  Removed {before - len(filtered)} listings older than {dedup.max_age_days} days")
+
+    return rank_listings(filtered, config.scoring_rules)
+
+
+def main():
+    args = parse_args()
+
+    config_path = Path(__file__).parent / args.config
+    config = load_config(config_path)
+
+    print(f"⚙️  Config: {args.config}")
+    print(f"   Query: {config.query}")
+    print(f"   Cities: {', '.join(config.cities)}\n")
+
+    storage_path = Path(__file__).parent / "data" / config.storage_filename
+    storage = ListingStorage(storage_path)
+
+    if args.clear:
+        print("🗑️  Clearing storage...")
+        storage.clear()
+
+    fetcher_config = FetcherConfig(delay_ms=5000, max_retries=3)
+    raw_data_dir = None
+
+    if args.save_raw:
+        config_name = Path(args.config).stem
+        raw_data_dir = Path(__file__).parent / "data" / "raw_data" / config_name
+        print(f"💾 Raw HTML: {raw_data_dir}\n")
+
+    fetcher = create_fetcher(fetcher_config, mode="live", raw_data_dir=raw_data_dir)
+
+    if args.parse_raw:
+        do_parse_raw(config, storage, args, fetcher)
+
+    if args.fetch is not None:
+        do_fetch(config, storage, args, fetcher)
+
+    if args.display or args.fetch is not None or args.parse_raw:
+        ranked_listings = rank_and_filter(storage, config, args)
+        if ranked_listings:
+            do_display(config, storage, ranked_listings, args)
+    else:
+        print("📂 Display mode (use --fetch or --parse-raw to collect data)")
+        ranked_listings = rank_and_filter(storage, config, args)
+        if ranked_listings:
+            do_display(config, storage, ranked_listings, args)
 
 
 if __name__ == "__main__":

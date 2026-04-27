@@ -503,6 +503,9 @@ class CraigslistListingParser(ListingParser):
             if isinstance(value, (int, float)):
                 return int(value)
             cleaned = str(value).replace(',', '').replace('$', '').strip()
-            return int(cleaned) if cleaned else None
+            if not cleaned:
+                return None
+            # Handle floats like "7900.00" by converting to float first
+            return int(float(cleaned))
         except (ValueError, AttributeError):
             return None
