@@ -8,5 +8,8 @@ cd "$DIR"
 # Create logs directory if needed
 mkdir -p "$DIR/logs"
 
+# Use uv-managed venv
+PYTHON="$DIR/.venv/bin/python"
+
 # Run the runner with email notifications
-python runner.py --configs-file config/configs.yaml --email --fetch 20
+"$PYTHON" runner.py --configs-file config/configs.yaml --email --fetch 20
