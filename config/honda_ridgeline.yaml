@@ -1,8 +1,9 @@
 searches:
   honda_ridgeline:
     query: "honda ridgeline"
-    categories: ["cta", "ctd"]
-    cities: ["sfbay", "monterey", "sacramento"]
+    categories: ["cta"]           # cta = by owner only; drop ctd (dealers)
+    cities: ["sfbay", "monterey", "sacramento", "losangeles", "sandiego",
+             "portland", "seattle", "reno", "fresno", "stockton"]
     max_pages: 3
     listing_type: "vehicle"
 
@@ -10,17 +11,17 @@ searches:
       filename: "honda_ridgeline_listings.json"
 
     scoring:
-      # ── 1st gen only (2006–2014) ──────────────────────────
+      # ── 1st gen only (2006–2014) ─────────────────────────────────────────────
       - keywords: ["2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014"]
         points: 20
         match: title
 
-      # Penalise 2nd gen (2017+) hard — different truck entirely
+      # Hard penalise 2nd gen (2017+) — completely different truck
       - keywords: ["2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"]
         points: -50
         match: title
 
-      # ── Low miles ─────────────────────────────────────────
+      # ── Low miles (≤150k preferred) ──────────────────────────────────────────
       - keywords: ["low miles", "low mileage", "low mi"]
         points: 20
 
@@ -30,11 +31,15 @@ searches:
       - keywords: ["under 150k", "under 150,000", "140k", "130k", "120k", "110k"]
         points: 8
 
-      # 200k+ is a hard boundary for the user
+      # Mild penalty for 150k–200k range (user prefers ≤150k)
+      - keywords: ["160k", "170k", "180k", "190k"]
+        points: -10
+
+      # Hard penalty above 200k
       - keywords: ["200k", "210k", "220k", "230k", "240k", "250k"]
         points: -30
 
-      # ── Clean title ───────────────────────────────────────
+      # ── Clean title ──────────────────────────────────────────────────────────
       - keywords: ["clean title", "title in hand", "clear title"]
         points: 20
         match: title
@@ -43,33 +48,53 @@ searches:
         points: 10
         match: description
 
-      # ── Mechanical condition ──────────────────────────────
-      - keywords: ["runs great", "runs excellent", "runs well", "drives great", "drives well"]
+      # ── One owner ────────────────────────────────────────────────────────────
+      - keywords: ["one owner", "1 owner", "single owner", "1-owner", "only owner"]
         points: 15
 
-      - keywords: ["well maintained", "maintained", "serviced", "records", "service history",
-                   "new tires", "new brakes", "recent service", "timing belt done"]
-        points: 12
+      # ── Dealer serviced / service records (love this) ─────────────────────────
+      - keywords: ["dealer serviced", "dealer maintained", "honda dealer", "honda service",
+                   "dealership service", "dealership maintained", "honda certified",
+                   "service records", "service history", "full service history",
+                   "maintenance records", "all records", "carfax"]
+        points: 15
 
-      - keywords: ["one owner", "1 owner", "single owner", "fleet", "carfax"]
+      - keywords: ["well maintained", "maintained", "serviced", "records",
+                   "new tires", "new brakes", "recent service", "timing belt done",
+                   "timing belt replaced"]
+        points: 8
+
+      - keywords: ["runs great", "runs excellent", "runs well", "drives great", "drives well"]
         points: 10
 
       - keywords: ["garage kept", "garaged"]
         points: 8
 
-      # ── Trim levels (RTL/RTS are higher trims) ────────────
+      # ── OEM / unmodified / stock (love this) ──────────────────────────────────
+      - keywords: ["stock", "oem", "original", "unmodified", "factory"]
+        points: 12
+        match: description
+        match_type: whole
+
+      - keywords: ["never modified", "all original", "bone stock", "completely stock"]
+        points: 15
+
+      # ── Cosmetic imperfections are fine for a truck — don't penalise these ───
+      # (no negative rules for minor dents, scratches, paint issues)
+
+      # ── Trim levels (RTL/RTS are higher trims) ───────────────────────────────
       - keywords: ["rtl", "rts"]
         points: 8
         match: title
         match_type: whole
 
-      # ── Red flags ─────────────────────────────────────────
+      # ── Red flags ─────────────────────────────────────────────────────────────
       - keywords: ["salvage", "salvage title", "rebuilt title", "rebuilt"]
-        points: -40
+        points: -50
         match: title
 
       - keywords: ["flood", "flood damage", "water damage"]
-        points: -40
+        points: -50
 
       - keywords: ["needs work", "project", "parts car", "mechanic special", "as-is",
                    "fixer", "not running", "does not run", "wont start", "won't start"]
@@ -78,24 +103,26 @@ searches:
       - keywords: ["accident", "frame damage", "structural damage"]
         points: -30
 
-      - keywords: ["dealer", "dealership", "financing available", "we finance",
-                   "buy here pay here", "lot price"]
-        points: -20
-
       - keywords: ["high miles", "high mileage"]
         points: -15
+
+      - keywords: ["modified", "lift kit", "leveling kit", "aftermarket", "custom wheels",
+                   "lowered", "suspension upgrade"]
+        points: -10
 
       - keywords: ["shipping", "will ship", "can ship", "nationwide"]
         points: -10
 
     price_rules:
-      - above: 10000   # over budget — hard ceiling
+      - above: 10000   # Over the user's budget ceiling
         points: -60
-      - below: 7000    # great deal, well under budget
-        points: 25
-      - below: 8500    # solid deal
-        points: 12
-      - no_price: true # unpriced listings are often overpriced or problematic
+      - below: 6000    # Great deal
+        points: 30
+      - below: 7500    # Solid deal
+        points: 15
+      - below: 9000    # Reasonable
+        points: 5
+      - no_price: true # Unpriced listings are often problematic
         points: -15
 
     deduplication:

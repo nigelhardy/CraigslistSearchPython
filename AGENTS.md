@@ -8,16 +8,16 @@ A Craigslist scraper that searches multiple categories, scores/ranks listings, r
 
 ```bash
 # 1. Fetch fresh data and save raw HTML (do this once to get sample data)
-python main.py --config config/subaru_forester.yaml --fetch --save-raw --clear
+python main.py --config config/honda_ridgeline.yaml --fetch --save-raw --clear
 
 # 2. Parse saved HTML files into storage (extracts real URLs from meta tags)
-python main.py --config config/subaru_forester.yaml --parse-raw
+python main.py --config config/honda_ridgeline.yaml --parse-raw
 
 # 3. Display current ranking
-python main.py --config config/subaru_forester.yaml --display
+python main.py --config config/honda_ridgeline.yaml --display
 
 # 4. Edit config/scoring rules, then re-display
-python main.py --config config/subaru_forester.yaml --display
+python main.py --config config/honda_ridgeline.yaml --display
 ```
 
 **Note:** The saved raw HTML contains `og:url` meta tags with the original Craigslist URLs. When parsing with `--parse-raw`, these real URLs are extracted and used as the primary link, so results show actual Craigslist links even when using saved data.
@@ -26,23 +26,46 @@ python main.py --config config/subaru_forester.yaml --display
 
 ```bash
 # Fetch new listings (unlimited)
-python main.py --config config/subaru_forester.yaml --fetch
+python main.py --config config/honda_ridgeline.yaml --fetch
 
 # Fetch specific number per city/category
-python main.py --config config/subaru_forester.yaml --fetch 5
+python main.py --config config/honda_ridgeline.yaml --fetch 5
 
 # Fetch and save raw HTML for later analysis
-python main.py --config config/subaru_forester.yaml --fetch --save-raw
+python main.py --config config/honda_ridgeline.yaml --fetch --save-raw
 
 # Clear storage and re-fetch
-python main.py --config config/subaru_forester.yaml --fetch --clear
+python main.py --config config/honda_ridgeline.yaml --fetch --clear
 ```
 
 ### Parse-Only Workflow
 
 ```bash
 # Re-parse existing raw HTML files (after fixing parser)
-python main.py --config config/subaru_forester.yaml --parse-raw --clear
+python main.py --config config/honda_ridgeline.yaml --parse-raw --clear
+```
+
+### Multi-config / Cron Runner
+
+`runner.py` fetches all configs listed in `config/configs.yaml` in one pass — designed to run every 15 min via cron.
+
+```bash
+# Run all configs defined in config/configs.yaml (with email notifications)
+python runner.py --configs-file config/configs.yaml --email --fetch 20
+
+# Run specific configs
+python runner.py --configs config/honda_ridgeline.yaml config/subaru_forester.yaml --fetch 20
+
+# Set up cron (every 15 min, logs to logs/)
+# */15 * * * * /path/to/run.sh >> /path/to/logs/scraper.log 2>&1
+./run.sh
+```
+
+Edit `config/configs.yaml` to add/remove configs from the rotation:
+```yaml
+configs:
+  - config/subaru_forester.yaml
+  - config/honda_ridgeline.yaml
 ```
 
 ## Commands
@@ -63,7 +86,9 @@ python main.py --config config/subaru_forester.yaml --parse-raw --clear
 
 ```
 .                     # Root: Entry point + core modules
-├── main.py           # Main entry point
+├── main.py           # Main entry point (single config)
+├── runner.py         # Multi-config runner (for cron / batch runs)
+├── run.sh            # Cron wrapper (calls runner.py with configs.yaml)
 ├── config.py         # Configuration loading (YAML parsing)
 ├── engine.py         # Search engine (fetches search pages)
 ├── fetcher.py        # HTTP client with caching
@@ -74,6 +99,8 @@ python main.py --config config/subaru_forester.yaml --parse-raw --clear
 ├── notifications.py  # Email notification service
 
 config/               # Configuration files
+├── configs.yaml          # Master list for multi-config runner
+├── honda_ridgeline.yaml
 ├── subaru_forester.yaml
 ├── forester_parts.yaml
 └── test_config.yaml
@@ -83,6 +110,8 @@ data/                 # State (JSON - gitignored)
 └── raw_data/        # Raw HTML cache (gitignored)
     └── <config>/    # One subdir per config
         └── *.html
+
+raw_data/             # Legacy raw HTML cache location (root-level)
 
 outputs/
 ├── simple_html.py
@@ -114,8 +143,10 @@ Config files in `config/` define:
 - `categories`: Craigslist categories (cta, pta, etc.)
 - `cities`: Cities to search (sfbay, losangeles, etc.)
 - `max_pages`: Pages per city
+- `listing_type`: `"vehicle"` for cars/trucks; `"base"` for parts/general
 - `storage.filename`: Output JSON file
 - `scoring`: List of keyword scoring rules (see existing configs for examples)
+- `price_rules`: List of price-based scoring rules (`above`, `below`, `no_price` + `points`)
 - `deduplication`: similarity threshold, max_age_days
 - `notifications`: enabled, min_score, max_listings
 
@@ -159,4 +190,7 @@ python main.py --config config/subaru_forester.yaml --display --email
 |------|---------|
 | `parsers/craigslist_parser.py` | Extracts data from Craigslist HTML |
 | `ranking.py` | Scores listings, filters duplicates |
-| `config/*.yaml` | Defines search params and scoring rules |
+| `runner.py` | Multi-config runner for cron/batch jobs |
+| `run.sh` | Cron wrapper — runs all configs in `config/configs.yaml` |
+| `config/configs.yaml` | Master config list for runner.py |
+| `config/*.yaml` | Defines search params, scoring rules, and price rules |
