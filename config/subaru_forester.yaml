@@ -110,5 +110,5 @@ searches:
     
     notifications:
       enabled: true
-      min_score: 20  # Only notify for listings scoring above this threshold
+      min_score: 60  # Only notify for listings scoring above this threshold
       max_listings: 20  # Maximum listings to include in email

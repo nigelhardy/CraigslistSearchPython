@@ -141,6 +141,11 @@ searches:
       - no_price: true # Unpriced listings are often problematic
         points: -15
 
+    notifications:
+      enabled: true
+      min_score: 60
+      max_listings: 20
+
     deduplication:
       enabled: true
       similarity_threshold: 0.85
