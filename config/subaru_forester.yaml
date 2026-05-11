@@ -1,8 +1,9 @@
 searches:
   subaru_forester:
     query: "subaru forester"
-    categories: ["cta", "pta"]
-    cities: ["sfbay", "losangeles"]
+    categories: ["cta"]
+    cities: ["sfbay", "losangeles", "sacramento", "sandiego", "portland",
+             "seattle", "reno", "fresno", "stockton", "monterey"]
     max_pages: 3
     listing_type: "vehicle"  # Specifies this is a vehicle search
     
@@ -10,6 +11,22 @@ searches:
       filename: "subaru_forester_listings.json"
     
     scoring:
+      # ── Must be a Forester — anchor the whole search ───────────────────────
+      - keywords: ["forester"]
+        points: 40
+        match: title
+        match_type: whole
+
+      # Penalise wrong vehicles showing up via keyword spam in title
+      - keywords: ["bmw", "mazda", "toyota", "ford", "chevy", "chevrolet", "dodge",
+                   "ram", "nissan", "gmc", "honda", "acura", "lexus", "audi",
+                   "volkswagen", "vw", "hyundai", "kia", "jeep", "mitsubishi",
+                   "outback", "impreza", "legacy", "crosstrek", "wrx", "brz"]
+        points: -60
+        match: title
+        match_type: whole
+
+      # ── Manual transmission (top priority) ────────────────────────────
       - keywords: ["manual", "5-speed", "5 speed", "6-speed", "6 speed", "standard transmission"]
         points: 25
         match: title
@@ -22,6 +39,11 @@ searches:
       
       - keywords: ["first gen", "sf5", "1998", "1999", "2000", "2001", "2002", "2003", "2004"]
         points: 20
+
+      # Penalise newer gens — user wants early Foresters only
+      - keywords: ["2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"]
+        points: -40
+        match: title
       
       - keywords: ["low miles", "low mileage", "under 100k", "under 80k", "under 60k"]
         points: 15
@@ -67,8 +89,19 @@ searches:
       - keywords: ["we rebuild subaru engines"]
         points: -100
         match: title
-      
-    
+
+    price_rules:
+      - above: 10000   # Over budget ceiling
+        points: -60
+      - below: 5000    # Great deal
+        points: 30
+      - below: 7000    # Solid deal
+        points: 15
+      - below: 9000    # Reasonable
+        points: 5
+      - no_price: true # Unpriced listings are often problematic
+        points: -15
+
     deduplication:
       enabled: true
       similarity_threshold: 0.85  # 0.0-1.0, higher = stricter

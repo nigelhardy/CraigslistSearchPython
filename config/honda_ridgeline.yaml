@@ -11,6 +11,22 @@ searches:
       filename: "honda_ridgeline_listings.json"
 
     scoring:
+      # ── Must be a Ridgeline — anchor the whole search ───────────────────────
+      - keywords: ["ridgeline"]
+        points: 40
+        match: title
+        match_type: whole
+
+      # Penalise wrong vehicles showing up via keyword spam in title
+      - keywords: ["bmw", "mazda", "toyota", "ford", "chevy", "chevrolet", "dodge",
+                   "ram", "nissan", "gmc", "subaru", "acura", "lexus", "audi",
+                   "volkswagen", "vw", "hyundai", "kia", "jeep", "mitsubishi",
+                   "tacoma", "tundra", "ranger", "f-150", "f150", "silverado",
+                   "colorado", "frontier", "titan", "highlander", "4runner"]
+        points: -60
+        match: title
+        match_type: whole
+
       # ── 1st gen only (2006–2014) ─────────────────────────────────────────────
       - keywords: ["2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014"]
         points: 20
