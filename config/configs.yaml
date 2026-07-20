@@ -1,4 +1,4 @@
 configs:
-  - config/subaru_forester.yaml
+  # - config/subaru_forester.yaml
   - config/honda_ridgeline.yaml
   # Add more configs here as you create them

@@ -166,6 +166,10 @@ class ListingRanker:
                 search_text = title_text
             elif match_location == "description":
                 search_text = desc_text
+            elif match_location == "city":
+                search_text = (listing.city or "").lower()
+            elif match_location == "location":
+                search_text = (listing.location or "").lower()
             else:
                 search_text = combined_text
             

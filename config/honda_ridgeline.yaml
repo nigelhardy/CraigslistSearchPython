@@ -12,17 +12,37 @@ searches:
 
     scoring:
       # ── Must be a Ridgeline — anchor the whole search ───────────────────────
-      - keywords: ["ridgeline"]
+      - keywords: ["ridgeline", "rideline"]   # include common misspelling
         points: 40
         match: title
+
+      # Hard penalise any Honda that isn't a Ridgeline (Odyssey, CR-V, etc.)
+      - keywords: ["odyssey", "cr-v", "crv", "pilot", "accord", "civic", "element",
+                   "passport", "hr-v", "hrv", "fit", "clarity", "insight", "prelude",
+                   "del sol", "s2000", "crosstour", "ridgeline sport"]
+        points: -100
+        match: title
+        excludes: ["ridgeline", "rideline"]
+
+      # Generic body-style spam from dealers (Teslas, sedans, etc.) — not a truck
+      - keywords: ["sedan", "coupe", "hatchback", "wagon", "convertible", "minivan",
+                   "plug-in", "electric"]
+        points: -60
+        match: title
         match_type: whole
+        excludes: ["ridgeline", "rideline"]
 
       # Penalise wrong vehicles showing up via keyword spam in title
       - keywords: ["bmw", "mazda", "toyota", "ford", "chevy", "chevrolet", "dodge",
                    "ram", "nissan", "gmc", "subaru", "acura", "lexus", "audi",
                    "volkswagen", "vw", "hyundai", "kia", "jeep", "mitsubishi",
                    "tacoma", "tundra", "ranger", "f-150", "f150", "silverado",
-                   "colorado", "frontier", "titan", "highlander", "4runner"]
+                   "colorado", "frontier", "titan", "highlander", "4runner",
+                   "tesla", "volvo", "infiniti", "mercedes", "benz", "buick",
+                   "cadillac", "lincoln", "pontiac", "saturn", "hummer", "jaguar",
+                   "porsche", "mini", "fiat", "scion", "genesis", "chrysler",
+                   "land rover", "range rover", "sienna", "sedona", "caravan",
+                   "quest", "trailblazer", "yukon", "impala", "wrangler", "focus"]
         points: -60
         match: title
         match_type: whole
@@ -128,6 +148,17 @@ searches:
 
       - keywords: ["shipping", "will ship", "can ship", "nationwide"]
         points: -10
+
+      # ── Location: strongly derank out-of-state ─────────────────────────────
+      # Not a hard filter, but only genuinely great listings will overcome this
+      - keywords: ["portland", "seattle", "reno"]   # OR / WA / NV
+        points: -60
+        match: city
+
+      # Mild derank for far SoCal (still CA, but a long haul)
+      - keywords: ["sandiego"]
+        points: -10
+        match: city
 
     price_rules:
       - above: 10000   # Over the user's budget ceiling
